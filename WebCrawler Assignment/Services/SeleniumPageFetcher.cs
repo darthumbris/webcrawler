@@ -2,6 +2,7 @@
 
 using OpenQA.Selenium;
 using Serilog;
+using System.Diagnostics;
 
 public sealed record FetchedPage(
     string Url,
@@ -21,15 +22,15 @@ public sealed class SeleniumPageFetcher
         string url,
         CancellationToken cancellationToken)
     {
-        Log.Information(
-    "Starting crawl for {DomainName}",
-    url);
+        var stopwatch = Stopwatch.StartNew();
         _driver.Navigate().GoToUrl(url);
 
-    //    Log.Logger.LogInformation(
-    //"Fetched {Url} in {ElapsedMs}ms",
-    //url,
-    //stopwatch.ElapsedMilliseconds);
+        //TODO maybe also handle stuff like scrolling?
+
+        Log.Information(
+    "Fetched {Url} in {ElapsedMs}ms",
+    url,
+    stopwatch.ElapsedMilliseconds);
 
         var html = _driver.PageSource;
 
@@ -38,6 +39,22 @@ public sealed class SeleniumPageFetcher
                 url,
                 html,
                 _driver.Title));
+    }
+
+    public Task<FetchedPage> FetchRobot(string url)
+    {
+        _driver.Navigate().GoToUrl(url);
+        var html = _driver.PageSource;
+        return Task.FromResult(
+            new FetchedPage(
+                url,
+                html,
+                _driver.Title));
+    }
+
+    public void Quit()
+    {
+        _driver.Quit();
     }
 }
 

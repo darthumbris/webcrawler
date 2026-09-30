@@ -13,7 +13,6 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 var app = builder.Build();
 
-//CrawlService crawler = new CrawlService();
 //Endpoints temporary until proper crawler implementation
 app.MapPost("/crawl", async (
     CrawlRequest request,
@@ -48,3 +47,5 @@ app.Run();
 //TODO handle the html extraction
 
 //TODO handle the logging with SeriLog (also check where logging is needed)
+
+//curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"tweakers.net\" }" https://localhost:7299/crawl
