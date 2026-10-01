@@ -22,6 +22,8 @@ public sealed class SeleniumPageFetcher
         string url,
         CancellationToken cancellationToken)
     {
+        //TODO maybe have a timeout for the fetch?
+        //use the cancellationToken for this
         var stopwatch = Stopwatch.StartNew();
         _driver.Navigate().GoToUrl(url);
 
@@ -41,8 +43,10 @@ public sealed class SeleniumPageFetcher
                 _driver.Title));
     }
 
-    public Task<FetchedPage> FetchRobot(string url)
+    public Task<FetchedPage> FetchRobot(string url, CancellationToken cancellationToken)
     {
+        //TODO handle cancellationToken 
+        Log.Information("Loading robots.txt from: {Url}", url);
         _driver.Navigate().GoToUrl(url);
         var html = _driver.PageSource;
         return Task.FromResult(

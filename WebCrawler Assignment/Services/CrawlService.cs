@@ -14,12 +14,16 @@ public sealed class CrawlService : ICrawlService
 
     private readonly List<string> _collectedHtml = new List<string>();
     private readonly List<string> _collectedText = new List<string>();
+    private readonly List<string> _collectedInternalLinks = new List<string>();
+    private readonly List<string> _collectedExternalLinks = new List<string>();
 
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(100);
 
     private readonly Stopwatch _stopwatch = new Stopwatch();
 
     private readonly SeleniumPageFetcher _pageFetcher;
+
+    private readonly HtmlExtractor _htmlExtractor = new HtmlExtractor();
 
     public CrawlService()
     {
@@ -38,37 +42,47 @@ string url,
 CancellationToken cancellationToken)
     {
         Log.Information("Starting crawl for domain: {Url}", url);
-        LoadRobot(url).Wait();
+        await LoadRobot(url, cancellationToken);
+
+        //TODO need to load the SiteMaps and put them in the Priority Queue (URL Frontier) to crawl first
+
+        _stopwatch.Start();
+        var delay = _robotsService.CrawlDelay();
+
+        Log.Information("Crawl delay set to: {Delay} seconds", delay.TotalSeconds);
         EnqueUrl(url);
-        //TODO also need to handle the robots.txt and robots header for the domain to determine which urls are allowed to be crawled
 
-        //TODO handle the delay between requests based on the robots.txt crawl-delay directive
-
+        //TODO maybe also handle the depth of the crawl
+        //TODO also maybe use config for max pages to crawl
         while (_queue.Count > 0)
         {
-            string currentUrl = _queue.Dequeue();
-
-            await _semaphore.WaitAsync(cancellationToken);
-
-            try
+            if (delay.TotalSeconds == 0 || _stopwatch.Elapsed > delay)
             {
-                await ProcessPageAsync(currentUrl, cancellationToken);
+                string currentUrl = _queue.Dequeue();
+
+                await _semaphore.WaitAsync(cancellationToken);
+
+                try
+                {
+                    await ProcessPageAsync(currentUrl, cancellationToken);
+                }
+                finally
+                {
+                    _stopwatch.Restart();
+                    _semaphore.Release();
+                }
             }
-            finally
-            {
-                _semaphore.Release();
-            }
+            
         }
 
-        //TODO also need to handle the interal/external links and text etc.
-
         _pageFetcher.Quit();
+
         var result = new CrawlResult
         (
             _collectedHtml,
-            new List<string> { "Sample text content" },
-            new List<string> { "https://example.com/internal-link" },
-            new List<string> { "https://external.com/external-link" }
+            _collectedText,
+            _collectedInternalLinks,
+            _collectedExternalLinks
         );
         return result;
     }
@@ -80,18 +94,41 @@ CancellationToken cancellationToken)
         {
             url = "https://" + url;
         }
-        //TODO maybe have a message if url is not allowed?
-        if (_robotsService.IsAllowed(url) && !_visited.Contains(url) && !_queue.Contains(url))
+
+        var robotAllowed = _robotsService.IsAllowed(url);
+        if (robotAllowed && !_visited.Contains(url) && !_queue.Contains(url))
         {
             _queue.Enqueue(url);
         }
+        else if (!robotAllowed)
+        {
+            Log.Information("URL is not allowed by robots.txt: {Url}", url);
+        }
     }
 
-    private async Task LoadRobot(string url)
+    private async Task LoadRobot(string url, CancellationToken cancellationToken)
     {
-        Log.Information("Loading robots.txt for domain: {Url}", url);
-        var fetchedRobotsTxt = await _pageFetcher.FetchRobot(url + "/robots.txt");
-        _robotsService.LoadTxt(fetchedRobotsTxt.Html.Split('\n'));
+        if (!(url.StartsWith("http://") || url.StartsWith("https://")))
+        {
+            url = "https://" + url;
+        }
+        var hostUrl = "https://" + new Uri(url).Host + "/robots.txt";
+        var fetchedRobotsTxt = await _pageFetcher.FetchRobot(hostUrl, cancellationToken);
+        _robotsService.LoadTxt(fetchedRobotsTxt.Html);
+    }
+
+    private async Task LoadSiteMaps()
+    {
+        var siteMaps = _robotsService.SiteMaps;
+
+        if (siteMaps == null)
+        {
+            return;
+        }
+        foreach (var siteMap in siteMaps)
+        {
+            //TODO fetch the sitemap page and put it in the URL Frontier (priority queue) to crawl first
+        }
     }
 
     private async Task ProcessPageAsync(string url, CancellationToken cancellationToken)
@@ -107,13 +144,20 @@ CancellationToken cancellationToken)
         {
             var fetchedPage = await _pageFetcher.FetchAsync(url, cancellationToken);
 
-            //only add the html etc if robot tags in header allows it
             if (_robotsService.CheckHeader(fetchedPage.Html))
             {
                 _collectedHtml.Add(fetchedPage.Html);
-                //ExtractedPage extractedPage = HtmlExtractor.Extract(fetchedPage.Html, url);
-                //TODO also need to use the html extractor to get the txt and internal/external links
-                //TODO need to enque discovered urls from the page to the queue for further crawling
+                ExtractedPage extractedPage = await _htmlExtractor.Extract(url, fetchedPage.Html);
+                _collectedText.Add(extractedPage.Text);
+                foreach (var internalLink in extractedPage.InternalLinks)
+                {
+                    //EnqueUrl(internalLink.ToString()); //TODO enable this again
+                    _collectedInternalLinks.Add(internalLink.ToString());
+                }
+                foreach (var externalLink in extractedPage.ExternalLinks)
+                {
+                    _collectedExternalLinks.Add(externalLink.ToString());
+                }
             }
         }
         catch (Exception ex)
@@ -123,12 +167,8 @@ CancellationToken cancellationToken)
     }
 }
 
-//TODO should coordinate the following
-//robots policy (header .txt)
-//URL frontier
-//PageFetcher
-//HtmlExtractor
-//then combine into the crawl result and return it
+//TODO should handle the following
+//URL frontier (priority pages)
 
 //Order of crawling should be:
 //Domain name -> URL Frontier -> robots policy check -> PageFetcher ->
