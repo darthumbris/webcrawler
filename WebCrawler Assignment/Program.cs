@@ -41,11 +41,7 @@ app.MapGet("/health", () =>
 
 app.Run();
 
-//TODO implemt the robot.txt (and robot header) handling (which urls are allowed to be crawled and what delay between requests)
 //TODO implement the scoring system do determine "interesting" pages
-
-//TODO handle the html extraction
-
-//TODO handle the logging with SeriLog (also check where logging is needed)
+//TODO check where more logging is needed?
 
 //curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"tweakers.net\" }" https://localhost:7299/crawl

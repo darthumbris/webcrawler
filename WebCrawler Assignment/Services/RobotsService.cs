@@ -1,8 +1,7 @@
 ﻿using HtmlAgilityPack;
-using OpenQA.Selenium.BiDi.Script;
+using Serilog;
 using System.Globalization;
 using WebCrawler.Models;
-using Serilog;
 
 namespace WebCrawler.Services;
 
@@ -79,7 +78,12 @@ public class SiteMap
     {
         Url = url;
     }
-    
+
+    internal static SiteMap FromUrl(string url)
+    {
+        return new SiteMap(new Uri(url));
+    }
+
     internal static SiteMap FromLine(RobotsLine line)
     {
         if (line is null)
@@ -94,8 +98,6 @@ public class SiteMap
         {
             parsedUri = candidate;
         }
-
-        //TODO need to load the xml sitemap and extract the urls from it
 
         return new SiteMap(parsedUri);
     }
@@ -124,7 +126,6 @@ public sealed class RobotsService
 
     public void LoadTxt(string content)
     {
-        //TODO need to handle the SiteMaps field (useful for UrlFrontier)
         _globalRules.Clear();
         _specificRules.Clear();
         _crawlDelayRules.Clear();
@@ -167,7 +168,8 @@ public sealed class RobotsService
                         if (rule.IsGlobal())
                         {
                             _globalRules.Add(rule);
-                        } else
+                        }
+                        else
                         {
                             _specificRules.Add(rule);
                         }
@@ -175,7 +177,8 @@ public sealed class RobotsService
                         {
                             IsDisallowed = true;
                         }
-                    } else
+                    }
+                    else
                     {
                         Log.Information("Adding crawl delay rule for user agent {Text} with delay {Count}", userAgent, line.Value);
                         _crawlDelayRules.Add(new CrawlDelayRule(userAgent, line.Value!, order++));
@@ -185,14 +188,23 @@ public sealed class RobotsService
                 case LineType.Unknown:
                     IsMalformed = true;
                     break;
-                case LineType.Comment:
                 case LineType.Sitemap:
+                    var siteMap = SiteMap.FromLine(line);
+                    if (siteMap.Url != null)
+                    {
+                        SiteMaps.Add(SiteMap.FromLine(line));
+                    }
+                    break;
+                case LineType.Comment:
                     break;
                 case LineType.UserAgent:
                     userAgent = line.Value!;
                     break;
             }
         }
+
+        if (IsMalformed)
+            Log.Warning("robot.txt is malformed");
     }
 
     public bool CheckHeader(string html)
@@ -235,7 +247,7 @@ public sealed class RobotsService
             return true;
         }
 
-        url = fixUrl(url);
+        url = FixUrl(url);
         var specificMatches = _specificRules
             .Where(x => _userAgent.IndexOf(x.UserAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
             .ToList();
@@ -270,7 +282,7 @@ public sealed class RobotsService
         foreach (var c in rule.Select((value, i) => new { i, value }))
         {
             var ch = c.value;
-            
+
             //exact match
             if (ch == '$' && c.i == ruleLength - 1)
             {
@@ -289,7 +301,7 @@ public sealed class RobotsService
                 //if wildcard is between
                 for (int start = c.i; start < path.Length; start++)
                 {
-                    if (IsUrlValid(path[start..], rule[(c.i+1)..]))
+                    if (IsUrlValid(path[start..], rule[(c.i + 1)..]))
                     {
                         return true;
                     }
@@ -307,11 +319,11 @@ public sealed class RobotsService
         return path.StartsWith(rule, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string fixUrl(string url)
+    private static string FixUrl(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
-            return "/"; 
+            return "/";
         }
         if (!url.StartsWith("/", StringComparison.Ordinal))
         {
@@ -347,7 +359,8 @@ public sealed class RobotsService
         if (specificDelays.Count > 0)
         {
             return specificDelays.First().Delay;
-        } else
+        }
+        else
         {
             return globalDelays.First().Delay;
         }

@@ -29,8 +29,10 @@ public class HtmlExtractor : IHTMLExtractor
 
                 Uri baseUri = new Uri(pageUrl);
 
-                if (Uri.TryCreate(baseUri, href, out Uri resultUri))
+                if (Uri.TryCreate(baseUri, href, out Uri? resultUri))
                 {
+                    if (resultUri == null)
+                        continue;
                     if (resultUri.Host == baseUri.Host)
                     {
                         internalLinks.Add(resultUri.ToString());

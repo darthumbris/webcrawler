@@ -28,8 +28,10 @@ public sealed class CrawlService : ICrawlService
     public CrawlService()
     {
         var chromeOptions = new ChromeOptions();
+        //chromeOptions.AddArguments(["--disable-infobars", "--lang=en_US", "--window-position=0,0", "--window-size=5,5"]);
+        //Some sites will disable the robots.txt loading when headless????
         chromeOptions.AddArguments("--headless=new"); // comment out for testing
-                                                      //TODO maybe also need to add the commandTimeOut?  
+        //TODO maybe also need to add the commandTimeOut?  
         IWebDriver driver = new ChromeDriver(chromeOptions);
         SeleniumPageFetcher pageFetcher = new SeleniumPageFetcher(driver);
         _pageFetcher = pageFetcher;
@@ -43,8 +45,7 @@ CancellationToken cancellationToken)
     {
         Log.Information("Starting crawl for domain: {Url}", url);
         await LoadRobot(url, cancellationToken);
-
-        //TODO need to load the SiteMaps and put them in the Priority Queue (URL Frontier) to crawl first
+        await LoadSiteMaps(_robotsService.SiteMaps,cancellationToken);
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay();
@@ -72,7 +73,7 @@ CancellationToken cancellationToken)
                     _semaphore.Release();
                 }
             }
-            
+
         }
 
         _pageFetcher.Quit();
@@ -117,9 +118,9 @@ CancellationToken cancellationToken)
         _robotsService.LoadTxt(fetchedRobotsTxt.Html);
     }
 
-    private async Task LoadSiteMaps()
+    private async Task LoadSiteMaps(List<SiteMap> siteMaps, CancellationToken cancellationToken)
     {
-        var siteMaps = _robotsService.SiteMaps;
+        //This will load the sitemaps from robots and will enque these first (priority)
 
         if (siteMaps == null)
         {
@@ -127,7 +128,24 @@ CancellationToken cancellationToken)
         }
         foreach (var siteMap in siteMaps)
         {
-            //TODO fetch the sitemap page and put it in the URL Frontier (priority queue) to crawl first
+            var fetchedSiteMap = await _pageFetcher.FetchSiteMap(siteMap, cancellationToken);
+            List<SiteMap> includedSiteMaps = new();
+            foreach (string url in fetchedSiteMap.Links)
+            {
+                //either load an included sitemap or enque the link in the sitemap
+                if (url.EndsWith(".xml"))
+                {
+                    includedSiteMaps.Add(SiteMap.FromUrl(url));
+                } else
+                {
+                    EnqueUrl(url);
+                }
+            }
+            //All the sitemaps that are included in sitemaps need to also load their links
+            if (includedSiteMaps.Count > 0)
+            {
+                await LoadSiteMaps(includedSiteMaps, cancellationToken);
+            }
         }
     }
 
