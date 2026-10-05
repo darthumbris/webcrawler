@@ -7,7 +7,7 @@ namespace WebCrawler.Services;
 public class HtmlExtractor : IHTMLExtractor
 {
     public async Task<ExtractedPage> Extract(
-        string pageUrl,
+        Uri baseUri,
         string html)
     {
         var doc = new HtmlDocument();
@@ -27,8 +27,6 @@ public class HtmlExtractor : IHTMLExtractor
                     continue;
                 }
 
-                Uri baseUri = new Uri(pageUrl);
-
                 if (Uri.TryCreate(baseUri, href, out Uri? resultUri))
                 {
                     if (resultUri == null)
@@ -47,15 +45,12 @@ public class HtmlExtractor : IHTMLExtractor
 
         var text = ExtractTextFromHtml(doc.DocumentNode.ChildNodes);
 
-        return new ExtractedPage(text, internalLinks, externalLinks);
+        return new ExtractedPage(html, text, internalLinks, externalLinks);
     }
 
     private static string ExtractTextFromHtml(HtmlNodeCollection nodes)
     {
         var text = new StringBuilder();
-
-        //TODO improve this now it doesn't give nice text back
-        //maybe also handle list/bullets/table etc?
 
         foreach (var node in nodes)
         {

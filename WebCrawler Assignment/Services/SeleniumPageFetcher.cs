@@ -2,9 +2,6 @@
 
 using OpenQA.Selenium;
 using Serilog;
-using System.Diagnostics;
-using System.Net;
-using System.Xml;
 using System.Xml.Linq;
 
 public sealed record FetchedPage(
@@ -14,7 +11,7 @@ public sealed record FetchedPage(
 
 public sealed record FetchedSiteMap
 (
-    IReadOnlyCollection<string> Links
+    IReadOnlyCollection<Uri> Links
 );
 
 public sealed class SeleniumPageFetcher
@@ -26,34 +23,18 @@ public sealed class SeleniumPageFetcher
         _driver = driver;
     }
 
-    public Task<FetchedPage> FetchAsync(
+    public async Task<string> FetchPageAsync(
         string url,
         CancellationToken cancellationToken)
     {
-        //TODO maybe have a timeout for the fetch?
-        //use the cancellationToken for this
-        var stopwatch = Stopwatch.StartNew();
+        cancellationToken.ThrowIfCancellationRequested();
         _driver.Navigate().GoToUrl(url);
 
-        //TODO maybe also handle stuff like scrolling?
-
-        Log.Information(
-    "Fetched {Url} in {ElapsedMs}ms",
-    url,
-    stopwatch.ElapsedMilliseconds);
-
-        var html = _driver.PageSource;
-
-        return Task.FromResult(
-            new FetchedPage(
-                url,
-                html,
-                _driver.Title));
+        return _driver.PageSource;
     }
 
     public Task<FetchedPage> FetchRobot(string url, CancellationToken cancellationToken)
     {
-        //TODO handle cancellationToken 
         Log.Information("Loading robots.txt from: {Url}", url);
         _driver.Navigate().GoToUrl(url);
         var html = _driver.PageSource;
@@ -66,15 +47,29 @@ public sealed class SeleniumPageFetcher
 
     public Task<FetchedSiteMap> FetchSiteMap(SiteMap siteMap, CancellationToken cancellationToken)
     {
-        //TODO handle cancellationToken
+        //TODO handle sitemaps that don't use xml for some reason?
+
+        //this also doesn't handle sitemap indexing for now
         var url = siteMap.Url!.ToString();
+
+        //TODO need to remove this navigate.goturl makes it slower
+        //but then also need to properly handle the too many requests that happens
+        //because it get's too fast
+        _driver.Navigate().GoToUrl(url);
+
         Log.Information("Loading sitemap from: {Url}", url);
         var xmlOther = XElement.Load(url);
         var urls = xmlOther.Descendants(xmlOther.GetDefaultNamespace() + "loc").Select(node => node.Value).ToList() ?? new List<string>();
         Log.Information("Loaded sitemap: {Urls} urls", urls.Count);
 
+        var uris = new List<Uri>();
+        foreach (var sitemapUrl in urls)
+        {
+            uris.Add(new Uri(sitemapUrl));
+        }
+
         return Task.FromResult(
-                new FetchedSiteMap(urls));
+                new FetchedSiteMap(uris));
     }
 
     public void Quit()
@@ -82,14 +77,3 @@ public sealed class SeleniumPageFetcher
         _driver.Quit();
     }
 }
-
-//TODO need to implement: and they need to be configurable
-//timeout,
-//javascript execution, 
-//total crawl duration,
-//max pages,
-//selenium failures,
-//cancellation,
-//driver lifetime
-
-//TODO make grid url etc configurable

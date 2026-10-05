@@ -8,11 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Remove="app.config" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="App.config" />
     <None Include="Services\RobotsService.cs" />
   </ItemGroup>
 

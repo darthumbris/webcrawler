@@ -1,6 +1,7 @@
 ﻿namespace WebCrawler.Services;
 
 public sealed record ExtractedPage(
+    string RawContent, //html 
     string Text,
     IReadOnlyCollection<string> InternalLinks,
     IReadOnlyCollection<string> ExternalLinks);
@@ -8,6 +9,6 @@ public sealed record ExtractedPage(
 public interface IHTMLExtractor
 {
     Task<ExtractedPage> Extract(
-        string pageUrl,
+        Uri baseUri,
         string html);
 }

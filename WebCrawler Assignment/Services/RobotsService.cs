@@ -74,7 +74,7 @@ public class SiteMap
 {
     public Uri? Url { get; }
 
-    private SiteMap(Uri? url)
+    public SiteMap(Uri? url)
     {
         Url = url;
     }
@@ -103,6 +103,71 @@ public class SiteMap
     }
 }
 
+class HeaderRule : Rule
+{
+    public HeaderRule(string userAgent) : base(userAgent, 0) { }
+}
+
+public class RobotHeader
+{
+    private List<HeaderRule> _noFollow = new();
+    private List<HeaderRule> _noIndex = new();
+
+    private RobotHeader()
+    {
+        _noFollow = new List<HeaderRule>();
+        _noIndex = new List<HeaderRule>();
+
+    }
+
+    internal static RobotHeader All()
+    {
+        return new RobotHeader();
+    }
+
+    public bool NoIndex(string userAgent)
+    {
+        if (_noIndex.Count == 0)
+        {
+            return false;
+        }
+        foreach (var rule in _noIndex)
+        {
+            if (rule.IsGlobal() || rule.UserAgent.Equals(userAgent))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public bool NoFollow(string userAgent)
+    {
+        if (_noFollow.Count == 0)
+        {
+            return false;
+        }
+        foreach (var rule in _noFollow)
+        {
+            if (rule.IsGlobal() || rule.UserAgent.Equals(userAgent))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void AddNoIndex(string userAgent)
+    {
+        _noIndex.Add(new HeaderRule(userAgent));
+    }
+
+    public void AddNoFollow(string userAgent)
+    {
+        _noFollow.Add(new HeaderRule(userAgent));
+    }
+}
+
 public sealed class RobotsService
 {
     private readonly List<AccessRule> _globalRules = new List<AccessRule>();
@@ -115,13 +180,8 @@ public sealed class RobotsService
     public bool IsMalformed { get; private set; }
     public bool HasRobotRules { get; private set; }
 
-    private readonly string _userAgent;
-
     public RobotsService()
     {
-        //TODO get this working from the App.config file
-        //_userAgent = ConfigurationManager.AppSettings.Get("UserAgent");
-        _userAgent = "Mozilla/5.0";
     }
 
     public void LoadTxt(string content)
@@ -207,40 +267,54 @@ public sealed class RobotsService
             Log.Warning("robot.txt is malformed");
     }
 
-    public bool CheckHeader(string html)
+    public RobotHeader ParseHeader(string html, string userAgent)
     {
-        //TODO not sure if this is what is meant with obey robot instructions in headers?
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
         var metaNodes = doc.DocumentNode.SelectNodes("//meta");
         if (metaNodes == null)
         {
-            return true;
+            return RobotHeader.All();
         }
+
+        var robotHeader = RobotHeader.All();
 
         foreach (var metaNode in metaNodes)
         {
             string content = metaNode.GetAttributeValue("content", string.Empty);
             string name = metaNode.GetAttributeValue("name", string.Empty);
             if (string.Equals(name, "robots", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(name, _userAgent, StringComparison.OrdinalIgnoreCase)
+                string.Equals(name, userAgent, StringComparison.OrdinalIgnoreCase)
                 )
             {
-                if (string.Equals(content, "noindex", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(content, "none", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(content, "nofollow", StringComparison.OrdinalIgnoreCase))
+                var ruleAgent = name.Equals("robots", StringComparison.OrdinalIgnoreCase) ? "*" : name;
+                if (string.Equals(content, "noindex", StringComparison.OrdinalIgnoreCase))
                 {
-                    return false;
+                    Log.Information("Header found robot meta rule for noIndex for userAgent {Text}", ruleAgent);
+                    robotHeader.AddNoIndex(ruleAgent);
+                }
+                else if (string.Equals(content, "nofollow", StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Information("Header found robot meta rule for noFollow for userAgent {Text}", ruleAgent);
+                    robotHeader.AddNoFollow(ruleAgent);
+                }
+                else if (string.Equals(content, "none", StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Information("Header found robot meta rule for none for userAgent {Text}", ruleAgent);
+                    robotHeader.AddNoFollow(ruleAgent);
+                    robotHeader.AddNoIndex(ruleAgent);
                 }
             }
         }
 
-        return true;
+        
+
+        return robotHeader;
     }
 
-
     public bool IsAllowed(
-        string url)
+        string url,
+        string userAgent)
     {
         if (!IsDisallowed || !HasRobotRules)
         {
@@ -249,7 +323,7 @@ public sealed class RobotsService
 
         url = FixUrl(url);
         var specificMatches = _specificRules
-            .Where(x => _userAgent.IndexOf(x.UserAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
+            .Where(x => userAgent.IndexOf(x.UserAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
             .ToList();
 
         //use speccific rules if they exist, otherwise use global rules
@@ -337,7 +411,7 @@ public sealed class RobotsService
         return url;
     }
 
-    public TimeSpan CrawlDelay()
+    public TimeSpan CrawlDelay(string userAgent)
     {
         //if no rules or no crawl delays no delay
         if (!HasRobotRules || _crawlDelayRules.Count == 0)
@@ -347,12 +421,12 @@ public sealed class RobotsService
 
         var globalDelays = _crawlDelayRules.Where(x => x.IsGlobal())
             .ToList();
-        var specificDelays = _crawlDelayRules.Where(x => x.UserAgent.IndexOf(_userAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
+        var specificDelays = _crawlDelayRules.Where(x => x.UserAgent.IndexOf(userAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
             .ToList();
 
         if (globalDelays.Count == 0 && specificDelays.Count == 0)
         {
-            Log.Information("No crawl delay rules found for user agent {Text}", _userAgent);
+            Log.Information("No crawl delay rules found for user agent {Text}", userAgent);
             return TimeSpan.Zero;
         }
 
