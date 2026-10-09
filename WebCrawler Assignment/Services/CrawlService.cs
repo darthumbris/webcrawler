@@ -35,11 +35,15 @@ public sealed class CrawlService : ICrawlService
 
     public CrawlService()
     {
-        var chromeOptions = new ChromeOptions();
+        //var chromeOptions = new ChromeOptions();
         //chromeOptions.AddArguments(["--disable-infobars", "--lang=en_US", "--window-position=0,0", "--window-size=5,5"]);
         //Some sites will disable the robots.txt loading when headless????
-        chromeOptions.AddArguments("--headless=new"); // comment out for testing
-        IWebDriver driver = new ChromeDriver(chromeOptions);
+        //chromeOptions.AddArguments("--headless=new"); // comment out for testing
+        string hubUrl = "http://localhost:4444/wd/hub";
+
+        //For Local testing don't use the hubUrl
+        IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
+        //TODO use the WebDriver class here to create the driver
         SeleniumPageFetcher pageFetcher = new SeleniumPageFetcher(driver);
         _pageFetcher = pageFetcher;
     }

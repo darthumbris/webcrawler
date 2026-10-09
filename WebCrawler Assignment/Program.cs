@@ -13,7 +13,6 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 var app = builder.Build();
 
-//Endpoints temporary until proper crawler implementation
 app.MapPost("/crawl", async (
     CrawlRequest request,
     ICrawlService crawler,
@@ -32,7 +31,7 @@ app.MapPost("/crawl", async (
 
 app.MapGet("/health", () =>
 {
-    //Temporary when actual crawling is implemented that gives the health status
+    //Not sure what to put here?
     return Results.Ok(new
     {
         status = "healthy"
@@ -40,8 +39,5 @@ app.MapGet("/health", () =>
 });
 
 app.Run();
-
-//TODO implement the scoring system do determine "interesting" pages
-//TODO check where more logging is needed?
 
 //curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"tweakers.net\" }" https://localhost:7299/crawl
