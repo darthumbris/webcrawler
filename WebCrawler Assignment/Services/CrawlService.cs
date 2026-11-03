@@ -1,8 +1,8 @@
 ﻿using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
 using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
@@ -14,7 +14,6 @@ public sealed class CrawlService : ICrawlService
     private readonly ConcurrentDictionary<string, byte> _visited = new();
     private readonly ConcurrentBag<ExtractedPage> _fetchedPages = new();
     private ConcurrentDictionary<Uri, CrawlUrlState> _crawlStates = new();
-    private readonly List<Uri> _sitemapUrls = new();
 
     private readonly List<string> _collectedHtml = new List<string>();
     private readonly List<string> _collectedText = new List<string>();
@@ -25,11 +24,14 @@ public sealed class CrawlService : ICrawlService
 
     private readonly Stopwatch _stopwatch = new Stopwatch();
 
-    private readonly SeleniumPageFetcher _pageFetcher;
+    private readonly SeleniumPageHandler _pageHandler;
 
     private readonly HtmlExtractor _htmlExtractor = new HtmlExtractor();
 
+    private readonly HttpClient _httpClient = new HttpClient();
+
     private RequestProcessor _requestProcessor = new();
+    private SiteMapService _siteMapService;
 
     private Uri? _baseUri;
 
@@ -39,13 +41,13 @@ public sealed class CrawlService : ICrawlService
         //chromeOptions.AddArguments(["--disable-infobars", "--lang=en_US", "--window-position=0,0", "--window-size=5,5"]);
         //Some sites will disable the robots.txt loading when headless????
         //chromeOptions.AddArguments("--headless=new"); // comment out for testing
-        string hubUrl = "http://localhost:4444/wd/hub";
 
         //For Local testing don't use the hubUrl
-        IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
-        //TODO use the WebDriver class here to create the driver
-        SeleniumPageFetcher pageFetcher = new SeleniumPageFetcher(driver);
-        _pageFetcher = pageFetcher;
+        //string hubUrl = "http://localhost:4444/wd/hub";
+        //IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
+        IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox);
+        _pageHandler = new SeleniumPageHandler(driver, _httpClient);
+        _siteMapService = new SiteMapService(_httpClient);
     }
 
     public async Task<CrawlResult> CrawlAsync(
@@ -60,11 +62,20 @@ CancellationToken cancellationToken)
         _baseUri = new Uri(url);
         Log.Information("Starting crawl for domain: {Url}", url);
         await LoadRobot(url, cancellationToken);
-        await LoadSiteMaps(_robotsService.SiteMaps, cancellationToken);
-        foreach (var sitemapUrl in _sitemapUrls)
+
+        var sitemapFiles = await _siteMapService.FetchSiteMapsAsync(url, _robotsService.SiteMaps, cancellationToken);
+        Log.Information("Found {Count} sitemap files for domain: {Url}", sitemapFiles.Count(), url);
+
+        var sitemapUrls = 0;
+        foreach (var sitemap in sitemapFiles)
         {
-            AddRequest(sitemapUrl);
+            foreach (var siteMapUrl in sitemap.Links)
+            {
+                sitemapUrls++;
+                AddRequest(siteMapUrl);
+            }
         }
+        Log.Information("Added {Count} sitemap urls to request queue for domain: {Url}", sitemapUrls, url);
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
@@ -74,13 +85,16 @@ CancellationToken cancellationToken)
 
         var resultCrawl = await ProcessAsync(async (requestResult, crawlState) =>
         {
-            var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.Content);
-            AddResult(crawlState.Location, parsedContent);
+            if (!string.IsNullOrEmpty(requestResult.Content))
+            {
+                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.Content);
+                AddResult(crawlState.Location, parsedContent);
+            }
         });
 
         _stopwatch.Stop();
 
-        _pageFetcher.Quit();
+        _pageHandler.Quit();
 
         foreach (var extractedPage in resultCrawl)
         {
@@ -114,9 +128,13 @@ CancellationToken cancellationToken)
 
     public void AddRequest(Uri url)
     {
-        if (url.Host != _baseUri!.Host)
+        //TODO this seems to fail sometimes when it shouldn't ? (see coppermine.nl)
+        if (!url.Host.Equals(_baseUri!.Host, StringComparison.InvariantCultureIgnoreCase))
+            //url.Host != _baseUri!.Host)
         {
-            Log.Information("Request for host {Url} is not the same as base host {Url}", url.Host, _baseUri.Host);
+            Log.Information("Request for host {Url} is not the same as base host {Url} skipping request.", url.Host, _baseUri.Host);
+            Log.Information("Request url: {Url} baseUrl {Url}", url, _baseUri);
+            return;
         }
 
         if (_crawlSettings.MaxPages > 0)
@@ -205,7 +223,7 @@ CancellationToken cancellationToken)
                     await responseHandler(processResult, crawlState);
                 }
             },
-            _pageFetcher,
+            _pageHandler,
             cancellation
             );
         Log.Information("Completed crawling {Count} pages", _fetchedPages.Count);
@@ -218,39 +236,21 @@ CancellationToken cancellationToken)
         {
             url = "https://" + url;
         }
-        var hostUrl = "https://" + new Uri(url).Host + "/robots.txt";
-        var fetchedRobotsTxt = await _pageFetcher.FetchRobot(hostUrl, cancellationToken);
-        _robotsService.LoadTxt(fetchedRobotsTxt.Html);
-    }
+        var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
 
-    private async Task LoadSiteMaps(List<SiteMap> siteMaps, CancellationToken cancellationToken)
-    {
-        //This will load the sitemaps from robots and will enque these first (priority)
+        using (var response = await _httpClient.GetAsync(robotsUrl, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
-        if (siteMaps == null)
-        {
-            return;
-        }
-        foreach (var siteMap in siteMaps)
-        {
-            var fetchedSiteMap = await _pageFetcher.FetchSiteMap(siteMap, cancellationToken);
-            List<SiteMap> includedSiteMaps = new();
-            foreach (Uri url in fetchedSiteMap.Links)
+            if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
             {
-                //either load an included sitemap or enque the link in the sitemap
-                if (url.ToString().EndsWith(".xml"))
-                {
-                    includedSiteMaps.Add(new SiteMap(url));
-                }
-                else
-                {
-                    _sitemapUrls.Add(url);
-                }
+                Log.Information("No robots.txt found for {Url}. Assuming all pages are allowed.", robotsUrl);
             }
-            //All the sitemaps that are included in sitemaps need to also load their links
-            if (includedSiteMaps.Count > 0)
+            else if ((int)response.StatusCode >= 200 && (int)response.StatusCode < 300)
             {
-                await LoadSiteMaps(includedSiteMaps, cancellationToken);
+                var fetchedRobotsTxt = await response.Content.ReadAsStringAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+                _robotsService.LoadTxt(fetchedRobotsTxt);
             }
         }
     }
