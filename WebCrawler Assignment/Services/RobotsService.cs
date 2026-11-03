@@ -7,24 +7,24 @@ namespace WebCrawler.Services;
 
 abstract class Rule
 {
-    public string UserAgent { get; }
+    public List<string> UserAgents { get; }
     public int Order { get; }
-    public Rule(string userAgent, int order)
+    public Rule(List<string> userAgents, int order)
     {
-        UserAgent = userAgent;
+        UserAgents = userAgents;
         Order = order;
     }
 
     public bool IsGlobal()
     {
-        return UserAgent == "*";
+        return UserAgents.Contains("*");
     }
 }
 
 class CrawlDelayRule : Rule
 {
     public TimeSpan Delay { get; }
-    public CrawlDelayRule(string userAgent, string line, int order) : base(userAgent, order)
+    public CrawlDelayRule(List<string> userAgents, string line, int order) : base(userAgents, order)
     {
         if (line is null)
         {
@@ -48,7 +48,7 @@ class AccessRule : Rule
     public string Path { get; }
     public bool Allowed { get; }
 
-    public AccessRule(string userAgent, RobotsLine line, int order) : base(userAgent, order)
+    public AccessRule(List<string> userAgents, RobotsLine line, int order) : base(userAgents, order)
     {
         if (line is null)
         {
@@ -105,7 +105,7 @@ public class SiteMap
 
 class HeaderRule : Rule
 {
-    public HeaderRule(string userAgent) : base(userAgent, 0) { }
+    public HeaderRule(List<string> userAgents) : base(userAgents, 0) { }
 }
 
 public class RobotHeader
@@ -133,7 +133,7 @@ public class RobotHeader
         }
         foreach (var rule in _noIndex)
         {
-            if (rule.IsGlobal() || rule.UserAgent.Equals(userAgent))
+            if (rule.IsGlobal() || rule.UserAgents.Contains(userAgent))
             {
                 return true;
             }
@@ -149,7 +149,7 @@ public class RobotHeader
         }
         foreach (var rule in _noFollow)
         {
-            if (rule.IsGlobal() || rule.UserAgent.Equals(userAgent))
+            if (rule.IsGlobal() || rule.UserAgents.Contains(userAgent))
             {
                 return true;
             }
@@ -159,12 +159,12 @@ public class RobotHeader
 
     public void AddNoIndex(string userAgent)
     {
-        _noIndex.Add(new HeaderRule(userAgent));
+        _noIndex.Add(new HeaderRule(new List<string> { userAgent }));
     }
 
     public void AddNoFollow(string userAgent)
     {
-        _noFollow.Add(new HeaderRule(userAgent));
+        _noFollow.Add(new HeaderRule(new List<string> { userAgent }));
     }
 }
 
@@ -195,7 +195,7 @@ public sealed class RobotsService
             return;
         }
 
-        var lines = content.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+        var lines = content.Split(new string[] { "\r\n", "\r", "\n"}, StringSplitOptions.RemoveEmptyEntries)
             .Where(l => !string.IsNullOrWhiteSpace(l))
             .ToArray();
 
@@ -204,8 +204,8 @@ public sealed class RobotsService
             return;
         }
 
-        //TODO handle the case where there are multiple user agents before the rules
-        string userAgent = string.Empty;
+        List<string> userAgents = new List<string>();
+        bool reset = false;
 
         int order = 0; //for what order useragent is
 
@@ -217,14 +217,15 @@ public sealed class RobotsService
             {
                 case LineType.Rule:
                 case LineType.DelayRule:
-                    if (string.IsNullOrEmpty(userAgent))
+                    reset = true;
+                    if (userAgents.Count == 0)
                     {
                         IsMalformed = true;
                         break;
                     }
                     if (line.Type == LineType.Rule)
                     {
-                        var rule = new AccessRule(userAgent, line, order++);
+                        var rule = new AccessRule(userAgents, line, order++);
                         if (rule.IsGlobal())
                         {
                             _globalRules.Add(rule);
@@ -240,12 +241,13 @@ public sealed class RobotsService
                     }
                     else
                     {
-                        Log.Information("Adding crawl delay rule for user agent {Text} with delay {Count}", userAgent, line.Value);
-                        _crawlDelayRules.Add(new CrawlDelayRule(userAgent, line.Value!, order++));
+                        Log.Information("Adding crawl delay rule for user agent {Text} with delay {Count}", userAgents.Last(), line.Value);
+                        _crawlDelayRules.Add(new CrawlDelayRule(userAgents, line.Value!, order++));
                     }
                     HasRobotRules = true;
                     break;
                 case LineType.Unknown:
+                    Log.Information("Unknown line in robots.txt: {Text}", line.Raw);
                     IsMalformed = true;
                     break;
                 case LineType.Sitemap:
@@ -258,13 +260,20 @@ public sealed class RobotsService
                 case LineType.Comment:
                     break;
                 case LineType.UserAgent:
-                    userAgent = line.Value!;
+                    if (reset)
+                    {
+                        userAgents.Clear();
+                        reset = false;
+                    }
+                    userAgents.Add(line.Value!);
                     break;
             }
         }
 
         if (IsMalformed)
             Log.Warning("robot.txt is malformed");
+
+        Log.Information("robots.txt loaded with {Count} rules and {Count} sitemaps", _globalRules.Count + _specificRules.Count, SiteMaps.Count);
     }
 
     public RobotHeader ParseHeader(string html, string userAgent)
@@ -307,7 +316,7 @@ public sealed class RobotsService
             }
         }
 
-        
+
 
         return robotHeader;
     }
@@ -322,10 +331,10 @@ public sealed class RobotsService
         }
 
         url = FixUrl(url);
-        var specificMatches = _specificRules
-            .Where(x => userAgent.IndexOf(x.UserAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
-            .ToList();
 
+        var specificMatches = _specificRules
+            .Where(x => x.UserAgents.Any(ua => userAgent.IndexOf(ua, StringComparison.InvariantCultureIgnoreCase) >= 0))
+            .ToList();
         //use speccific rules if they exist, otherwise use global rules
         var relevantRules = specificMatches.Count > 0
             ? specificMatches.Where(x =>
@@ -421,7 +430,9 @@ public sealed class RobotsService
 
         var globalDelays = _crawlDelayRules.Where(x => x.IsGlobal())
             .ToList();
-        var specificDelays = _crawlDelayRules.Where(x => x.UserAgent.IndexOf(userAgent, StringComparison.InvariantCultureIgnoreCase) >= 0)
+
+        var specificDelays = _crawlDelayRules
+            .Where(x => x.UserAgents.Any(ua => userAgent.IndexOf(ua, StringComparison.InvariantCultureIgnoreCase) >= 0))
             .ToList();
 
         if (globalDelays.Count == 0 && specificDelays.Count == 0)
