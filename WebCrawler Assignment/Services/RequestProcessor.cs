@@ -21,7 +21,7 @@ namespace WebCrawler.Services
             PendingRequests++;
         }
 
-        private async Task<ProcessResult> ProcessAsync(ProcessInfo info, SeleniumPageFetcher pageFetcher)
+        private async Task<ProcessResult> ProcessAsync(ProcessInfo info, SeleniumPageHandler pageHandler)
         {
             //add delay to task if needed
             if (info.Delay > 0)
@@ -37,7 +37,11 @@ namespace WebCrawler.Services
                 var timeout = new CancellationTokenSource(_requestOptions.RequestTimeOut).Token;
                 var cancel = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout).Token;
 
-                var fetchedPage = await pageFetcher.FetchPageAsync(info.Location.ToString(), cancel);
+                var fetchedPage = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
+
+                //TODO execute the proper javascript here
+                var executedScript = await pageHandler.ExecuteJavascriptAsync("var callback = arguments[arguments.length - 1];var check = () => {callback(document.title);};check();", cancel);
+                Log.Information("Executed script for url {Url} result: {Result}", info.Location, executedScript);
 
                 info.Timer.Stop();
 
@@ -76,7 +80,7 @@ namespace WebCrawler.Services
             }
         }
 
-        public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageFetcher pageFetcher, CancellationToken cancellationToken = default)
+        public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageHandler pageHandler, CancellationToken cancellationToken = default)
         {
             var active = new ConcurrentDictionary<Task<ProcessResult>, ProcessInfo>(_requestOptions.MaxSimultanousRequests, _requestOptions.MaxSimultanousRequests);
             var randomOffset = new Random();
@@ -106,9 +110,9 @@ namespace WebCrawler.Services
                             Cancellation = cancellationToken,
                         };
 
-                        Log.Information("Request for {Url} starts with a delay of {ms}", url, requestDelay);
+                        Log.Information("Request for {Url} starts with a delay of {ms}ms", url, requestDelay);
 
-                        var task = ProcessAsync(processInfo, pageFetcher);
+                        var task = ProcessAsync(processInfo, pageHandler);
                         active.TryAdd(task, processInfo);
                         requestsHandled++;
 
