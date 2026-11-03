@@ -195,7 +195,7 @@ public sealed class RobotsService
             return;
         }
 
-        var lines = content.Split(new string[] { "\r\n", "\r", "\n"}, StringSplitOptions.RemoveEmptyEntries)
+        var lines = content.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries)
             .Where(l => !string.IsNullOrWhiteSpace(l))
             .ToArray();
 

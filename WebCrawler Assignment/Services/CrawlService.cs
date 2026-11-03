@@ -130,7 +130,7 @@ CancellationToken cancellationToken)
     {
         //TODO this seems to fail sometimes when it shouldn't ? (see coppermine.nl)
         if (!url.Host.Equals(_baseUri!.Host, StringComparison.InvariantCultureIgnoreCase))
-            //url.Host != _baseUri!.Host)
+        //url.Host != _baseUri!.Host)
         {
             Log.Information("Request for host {Url} is not the same as base host {Url} skipping request.", url.Host, _baseUri.Host);
             Log.Information("Request url: {Url} baseUrl {Url}", url, _baseUri);

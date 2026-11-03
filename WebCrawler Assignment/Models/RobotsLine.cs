@@ -12,12 +12,13 @@ internal enum LineType
 
 internal class RobotsLine
 {
-    public LineType Type {  get;}
+    public LineType Type { get; }
     public string Raw { get; }
     public string? Field { get; }
     public string? Value { get; }
 
-    public RobotsLine(string line) {
+    public RobotsLine(string line)
+    {
         if (string.IsNullOrWhiteSpace(line))
         {
             throw new ArgumentException("Can't create a line from null", nameof(line));
@@ -39,7 +40,7 @@ internal class RobotsLine
         {
             trim = trim.Substring(0, commentIndex).TrimEnd();
         }
-        
+
         //field
         var colonIndex = trim.IndexOf(':');
         var field = colonIndex < 0 ? string.Empty : trim.Substring(0, colonIndex);

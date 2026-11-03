@@ -1,8 +1,6 @@
 ﻿namespace WebCrawler.Services;
 
 using OpenQA.Selenium;
-using Serilog;
-using System.Xml.Linq;
 
 public sealed record FetchedPage(
     string Url,

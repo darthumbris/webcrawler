@@ -32,6 +32,8 @@ app.MapPost("/crawl", async (
 app.MapGet("/health", () =>
 {
     //Not sure what to put here?
+    //TODO check what to put here
+    //maybe if the selenium driver is still running and can fetch a page, if not return unhealthy
     return Results.Ok(new
     {
         status = "healthy"
@@ -41,3 +43,11 @@ app.MapGet("/health", () =>
 app.Run();
 
 //curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"tweakers.net\" }" https://localhost:7299/crawl
+
+
+//TODO's: 
+
+
+//custom javascript to run on the pages to check what variables are set and what is being loaded
+//2. gerenderede website de text ophalen (via javascript)
+//3. company check doen , welke pagina's loaden om te checken of het een bedrijf is.

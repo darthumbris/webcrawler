@@ -3,7 +3,7 @@
     public class Request
     {
         public TimeSpan ElapsedTime { get; set; }
-        public DateTime StartTime { get; set;  }
+        public DateTime StartTime { get; set; }
 
         //should maybe also have a statuscode or success
         //(but selenium doesn't give response code for some reason...)

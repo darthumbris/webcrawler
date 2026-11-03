@@ -40,6 +40,7 @@ namespace WebCrawler.Services
                 var fetchedPage = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
 
                 //TODO execute the proper javascript here
+                //probably the javascript that get's all the text from the page and returns it as a string
                 var executedScript = await pageHandler.ExecuteJavascriptAsync("var callback = arguments[arguments.length - 1];var check = () => {callback(document.title);};check();", cancel);
                 Log.Information("Executed script for url {Url} result: {Result}", info.Location, executedScript);
 
