@@ -1,6 +1,6 @@
 services:
   chrome:
-    image: selenium/node-chrome:4.49.0
+    image: selenium/node-chrome:4.51.0
     volumes:
       - /dev/shm:/dev/shm
     depends_on:
@@ -14,7 +14,7 @@ services:
       - "6900:5900"
 
   edge:
-    image: selenium/node-edge:4.49.0
+    image: selenium/node-edge:4.51.0
     volumes:
       - /dev/shm:/dev/shm
     depends_on:
@@ -28,7 +28,7 @@ services:
       - "6901:5900"
 
   firefox:
-    image: selenium/node-firefox:4.49.0
+    image: selenium/node-firefox:4.51.0
     volumes:
       - /dev/shm:/dev/shm
     depends_on:
@@ -42,7 +42,7 @@ services:
       - "6902:5900"
 
   selenium-hub:
-    image: selenium/hub:4.49.0
+    image: selenium/hub:4.51.0
     container_name: selenium-hub
     ports:
       - "4442:4442"
