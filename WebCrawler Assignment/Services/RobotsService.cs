@@ -79,7 +79,7 @@ public class SiteMap(Uri? url)
     }
 }
 
-class HeaderRule(List<string> userAgents) : Rule(userAgents, 0) {}
+class HeaderRule(List<string> userAgents) : Rule(userAgents, 0) { }
 
 public class RobotHeader
 {
@@ -132,7 +132,7 @@ public class RobotHeader
 
     public void AddNoIndex(string userAgent)
     {
-        _noIndex.Add(new HeaderRule([ userAgent ]));
+        _noIndex.Add(new HeaderRule([userAgent]));
     }
 
     public void AddNoFollow(string userAgent)
@@ -153,7 +153,7 @@ public sealed class RobotsService
     public bool IsMalformed { get; private set; }
     public bool HasRobotRules { get; private set; }
 
-    public RobotsService() {}
+    public RobotsService() { }
 
     public void LoadTxt(string content)
     {
