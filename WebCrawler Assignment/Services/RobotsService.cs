@@ -310,11 +310,11 @@ public sealed class RobotsService
         var relevantRules = specificMatches.Count > 0
             ? specificMatches.Where(x =>
                 string.IsNullOrEmpty(x.Path) ||
-                IsUrlValid(url.Substring(1), x.Path.Substring(1)))
+                IsUrlValid(url[1..], x.Path[1..]))
                 .ToList()
             : _globalRules.Where(x =>
                 string.IsNullOrEmpty(x.Path) ||
-                IsUrlValid(url.Substring(1), x.Path.Substring(1)))
+                IsUrlValid(url[1..], x.Path[1..]))
                 .ToList();
 
         if (relevantRules.Count == 0)

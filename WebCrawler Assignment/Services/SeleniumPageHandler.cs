@@ -32,10 +32,7 @@ public sealed class SeleniumPageHandler(IWebDriver driver)
     public async Task<string> ExecuteJavascriptAsync(string javascript, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var result = (string?)_executor.ExecuteAsyncScript(javascript);
-
-        result = result ?? string.Empty;
-        return result;
+        return (string?)_executor.ExecuteAsyncScript(javascript) ?? string.Empty;
     }
 
     public void Quit()

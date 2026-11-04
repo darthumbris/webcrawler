@@ -191,7 +191,7 @@ public sealed class CrawlService : ICrawlService
 
     public void AddResult(Uri url, ExtractedPage content)
     {
-        if (_crawlStates.TryGetValue(url, out var crawlState))
+        if (_crawlStates.TryGetValue(url, out var _))
         {
             var robotHeader = _robotsService.ParseHeader(content.HtmlContent, _crawlSettings.UserAgent);
             if (robotHeader.NoIndex(_crawlSettings.UserAgent))
@@ -237,7 +237,6 @@ public sealed class CrawlService : ICrawlService
                 }
                 else
                 {
-
                     var request = new Request
                     {
                         StartTime = processResult.StartTime,
@@ -263,20 +262,18 @@ public sealed class CrawlService : ICrawlService
         }
         var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
 
-        using (var response = await _httpClient.GetAsync(robotsUrl, cancellationToken))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+        using var response = await _httpClient.GetAsync(robotsUrl, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-            if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
-            {
-                Log.Information("No robots.txt found for {Url}. Assuming all pages are allowed.", robotsUrl);
-            }
-            else if ((int)response.StatusCode >= 200 && (int)response.StatusCode < 300)
-            {
-                var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                _robotsService.LoadTxt(fetchedRobotsTxt);
-            }
+        if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            Log.Information("No robots.txt found for {Url}. Assuming all pages are allowed.", robotsUrl);
+        }
+        else if ((int)response.StatusCode >= 200 && (int)response.StatusCode < 300)
+        {
+            var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _robotsService.LoadTxt(fetchedRobotsTxt);
         }
     }
 }
