@@ -3,16 +3,11 @@
 using Serilog;
 using System.Net;
 
-public sealed class SiteMapService
+public sealed class SiteMapService(HttpClient httpClient)
 {
 
-    private readonly HttpClient _httpClient;
-    private static SiteMapParser _siteMapParser = new SiteMapParser();
-
-    public SiteMapService(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
+    private readonly HttpClient _httpClient = httpClient;
+    private static readonly SiteMapParser _siteMapParser = new();
 
     private async Task<IEnumerable<Uri>> LoadSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
@@ -64,7 +59,7 @@ public sealed class SiteMapService
         return loadedSiteMaps;
     }
 
-    private static bool checkSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("application/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("/plain", StringComparison.InvariantCultureIgnoreCase);
+    private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("application/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("/plain", StringComparison.InvariantCultureIgnoreCase);
 
     private async Task<FetchedSiteMap> FetchSiteMapAsync(Uri siteMapUrl, CancellationToken cancellationToken)
     {
@@ -74,12 +69,12 @@ public sealed class SiteMapService
 
             if (resp.IsSuccessStatusCode)
             {
-                var contentType = resp.Content.Headers.ContentType?.MediaType;
+                var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
 
                 //TODO maybe need to handle compressed sitemaps?
-                if (checkSiteMapContentType(contentType))
+                if (CheckSiteMapContentType(contentType))
                 {
-                    using var stream = await resp.Content.ReadAsStreamAsync();
+                    using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
                     cancellationToken.ThrowIfCancellationRequested();
 
                     var siteMapStream = stream;
@@ -95,13 +90,13 @@ public sealed class SiteMapService
                     }
                 }
             }
-            return new FetchedSiteMap(new List<Uri>(), new List<Uri>(), siteMapUrl);
+            return new FetchedSiteMap([], [], siteMapUrl);
         }
 
         catch (Exception ex)
         {
             Log.Warning("Failed to load sitemap from {Url} with exception: {Text}", siteMapUrl, ex.Message);
-            return new FetchedSiteMap(new List<Uri>(), new List<Uri>(), siteMapUrl);
+            return new FetchedSiteMap([], [], siteMapUrl);
         }
     }
 

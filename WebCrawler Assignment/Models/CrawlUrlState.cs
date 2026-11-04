@@ -12,7 +12,7 @@
 
     public class CrawlUrlState
     {
-        public Uri Location { get; set; }
-        public IList<Request> Requests { get; set; } = new List<Request>();
+        public required Uri Location { get; set; }
+        public IList<Request> Requests { get; set; } = [];
     }
 }

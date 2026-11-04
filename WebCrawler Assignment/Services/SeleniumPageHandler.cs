@@ -11,21 +11,13 @@ public sealed record FetchedSiteMap
 (
     IReadOnlyCollection<Uri> Links,
     IReadOnlyCollection<Uri> SiteMaps,
-    Uri url
+    Uri Url
 );
 
-public sealed class SeleniumPageHandler
+public sealed class SeleniumPageHandler(IWebDriver driver)
 {
-    private readonly IWebDriver _driver;
-    private readonly IJavaScriptExecutor _executor;
-    private readonly HttpClient _httpClient;
-
-    public SeleniumPageHandler(IWebDriver driver, HttpClient httpClient)
-    {
-        _driver = driver;
-        _executor = (IJavaScriptExecutor)driver;
-        _httpClient = httpClient;
-    }
+    private readonly IWebDriver _driver = driver;
+    private readonly IJavaScriptExecutor _executor = (IJavaScriptExecutor)driver;
 
     public async Task<string> FetchPageAsync(
         string url,

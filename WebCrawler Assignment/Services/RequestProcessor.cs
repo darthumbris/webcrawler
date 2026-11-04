@@ -9,7 +9,7 @@ namespace WebCrawler.Services
 {
     public class RequestProcessor
     {
-        private ConcurrentQueue<Uri> _requestQueue { get; } = new();
+        private ConcurrentQueue<Uri> RequestQueue { get; } = new();
         private readonly RequestOptions _requestOptions = new();
         public int PendingRequests = 0;
 
@@ -17,7 +17,7 @@ namespace WebCrawler.Services
 
         public void AddRequest(Uri uri)
         {
-            _requestQueue.Enqueue(uri);
+            RequestQueue.Enqueue(uri);
             PendingRequests++;
         }
 
@@ -87,13 +87,13 @@ namespace WebCrawler.Services
             var randomOffset = new Random();
             var requestsHandled = 0;
 
-            while (active.Count > 0 || !_requestQueue.IsEmpty)
+            while (!active.IsEmpty || !RequestQueue.IsEmpty)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                while (!_requestQueue.IsEmpty)
+                while (!RequestQueue.IsEmpty)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (_requestQueue.TryDequeue(out var url))
+                    if (RequestQueue.TryDequeue(out var url))
                     {
                         Double requestDelay = 0;
 

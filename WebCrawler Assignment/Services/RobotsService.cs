@@ -5,15 +5,10 @@ using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
-abstract class Rule
+abstract class Rule(List<string> userAgents, int order)
 {
-    public List<string> UserAgents { get; }
-    public int Order { get; }
-    public Rule(List<string> userAgents, int order)
-    {
-        UserAgents = userAgents;
-        Order = order;
-    }
+    public List<string> UserAgents { get; } = userAgents;
+    public int Order { get; } = order;
 
     public bool IsGlobal()
     {
@@ -26,10 +21,7 @@ class CrawlDelayRule : Rule
     public TimeSpan Delay { get; }
     public CrawlDelayRule(List<string> userAgents, string line, int order) : base(userAgents, order)
     {
-        if (line is null)
-        {
-            throw new ArgumentNullException(nameof(line));
-        }
+        ArgumentNullException.ThrowIfNull(line);
         if (!double.TryParse(line,
                              NumberStyles.Float,
                              CultureInfo.InvariantCulture,
@@ -50,46 +42,30 @@ class AccessRule : Rule
 
     public AccessRule(List<string> userAgents, RobotsLine line, int order) : base(userAgents, order)
     {
-        if (line is null)
-        {
-            throw new ArgumentNullException(nameof(line));
-        }
+        ArgumentNullException.ThrowIfNull(line);
 
         Allowed = string.Equals(line.Field, "allow", StringComparison.OrdinalIgnoreCase);
         var rawPath = line.Value ?? string.Empty;
-        if (rawPath.Length > 0 && !rawPath.StartsWith("/"))
+        if (rawPath.Length > 0 && !rawPath.StartsWith('/'))
         {
             rawPath = "/" + rawPath;
         }
         Path = rawPath;
     }
 
-    public bool isAnyPathDisallowed()
+    public bool IsAnyPathDisallowed()
     {
         return !Allowed && !string.IsNullOrEmpty(Path);
     }
 }
 
-public class SiteMap
+public class SiteMap(Uri? url)
 {
-    public Uri? Url { get; }
-
-    public SiteMap(Uri? url)
-    {
-        Url = url;
-    }
-
-    internal static SiteMap FromUrl(string url)
-    {
-        return new SiteMap(new Uri(url));
-    }
+    public Uri? Url { get; } = url;
 
     internal static SiteMap FromLine(RobotsLine line)
     {
-        if (line is null)
-        {
-            throw new ArgumentNullException(nameof(line));
-        }
+        ArgumentNullException.ThrowIfNull(line);
 
         var url = line.Value ?? string.Empty;
         Uri? parsedUri = null;
@@ -103,20 +79,17 @@ public class SiteMap
     }
 }
 
-class HeaderRule : Rule
-{
-    public HeaderRule(List<string> userAgents) : base(userAgents, 0) { }
-}
+class HeaderRule(List<string> userAgents) : Rule(userAgents, 0) {}
 
 public class RobotHeader
 {
-    private List<HeaderRule> _noFollow = new();
-    private List<HeaderRule> _noIndex = new();
+    private readonly List<HeaderRule> _noFollow = [];
+    private readonly List<HeaderRule> _noIndex = [];
 
     private RobotHeader()
     {
-        _noFollow = new List<HeaderRule>();
-        _noIndex = new List<HeaderRule>();
+        _noFollow = [];
+        _noIndex = [];
 
     }
 
@@ -159,30 +132,28 @@ public class RobotHeader
 
     public void AddNoIndex(string userAgent)
     {
-        _noIndex.Add(new HeaderRule(new List<string> { userAgent }));
+        _noIndex.Add(new HeaderRule([ userAgent ]));
     }
 
     public void AddNoFollow(string userAgent)
     {
-        _noFollow.Add(new HeaderRule(new List<string> { userAgent }));
+        _noFollow.Add(new HeaderRule([userAgent]));
     }
 }
 
 public sealed class RobotsService
 {
-    private readonly List<AccessRule> _globalRules = new List<AccessRule>();
-    private readonly List<AccessRule> _specificRules = new List<AccessRule>();
-    private readonly List<CrawlDelayRule> _crawlDelayRules = new();
+    private readonly List<AccessRule> _globalRules = [];
+    private readonly List<AccessRule> _specificRules = [];
+    private readonly List<CrawlDelayRule> _crawlDelayRules = [];
 
-    public List<SiteMap> SiteMaps { get; private set; } = new();
+    public List<SiteMap> SiteMaps { get; private set; } = [];
 
     public bool IsDisallowed { get; private set; }
     public bool IsMalformed { get; private set; }
     public bool HasRobotRules { get; private set; }
 
-    public RobotsService()
-    {
-    }
+    public RobotsService() {}
 
     public void LoadTxt(string content)
     {
@@ -195,7 +166,7 @@ public sealed class RobotsService
             return;
         }
 
-        var lines = content.Split(new string[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+        var lines = content.Split(["\r\n", "\r", "\n"], StringSplitOptions.RemoveEmptyEntries)
             .Where(l => !string.IsNullOrWhiteSpace(l))
             .ToArray();
 
@@ -204,7 +175,7 @@ public sealed class RobotsService
             return;
         }
 
-        List<string> userAgents = new List<string>();
+        List<string> userAgents = [];
         bool reset = false;
 
         int order = 0; //for what order useragent is
@@ -234,7 +205,7 @@ public sealed class RobotsService
                         {
                             _specificRules.Add(rule);
                         }
-                        if (rule.isAnyPathDisallowed())
+                        if (rule.IsAnyPathDisallowed())
                         {
                             IsDisallowed = true;
                         }
@@ -333,7 +304,7 @@ public sealed class RobotsService
         url = FixUrl(url);
 
         var specificMatches = _specificRules
-            .Where(x => x.UserAgents.Any(ua => userAgent.IndexOf(ua, StringComparison.InvariantCultureIgnoreCase) >= 0))
+            .Where(x => x.UserAgents.Any(ua => userAgent.Contains(ua, StringComparison.InvariantCultureIgnoreCase)))
             .ToList();
         //use speccific rules if they exist, otherwise use global rules
         var relevantRules = specificMatches.Count > 0
@@ -408,7 +379,7 @@ public sealed class RobotsService
         {
             return "/";
         }
-        if (!url.StartsWith("/", StringComparison.Ordinal))
+        if (!url.StartsWith('/'))
         {
             url = "/" + url;
         }
@@ -432,7 +403,7 @@ public sealed class RobotsService
             .ToList();
 
         var specificDelays = _crawlDelayRules
-            .Where(x => x.UserAgents.Any(ua => userAgent.IndexOf(ua, StringComparison.InvariantCultureIgnoreCase) >= 0))
+            .Where(x => x.UserAgents.Any(ua => userAgent.Contains(ua, StringComparison.InvariantCultureIgnoreCase)))
             .ToList();
 
         if (globalDelays.Count == 0 && specificDelays.Count == 0)

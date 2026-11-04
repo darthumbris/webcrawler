@@ -4,11 +4,12 @@ namespace WebCrawler.Services;
 
 public class HtmlExtractor : IHTMLExtractor
 {
-    public async Task<ExtractedPage> Extract(
-        Uri baseUri,
-        string html,
-        string textContent)
+    public async Task<ExtractedPage> Extract(Uri baseUri, string html, string textContent)
     {
+        if (string.IsNullOrEmpty(html))
+        {
+            return new ExtractedPage(string.Empty, textContent, [], []);
+        }
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 

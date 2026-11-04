@@ -28,7 +28,7 @@ internal class RobotsLine
         var trim = line.Trim();
 
         //comment
-        if (trim.StartsWith("#", StringComparison.Ordinal))
+        if (trim.StartsWith('#'))
         {
             Type = LineType.Comment;
             //return because comment does not have value etc
@@ -38,12 +38,12 @@ internal class RobotsLine
         var commentIndex = trim.IndexOf('#');
         if (commentIndex >= 0)
         {
-            trim = trim.Substring(0, commentIndex).TrimEnd();
+            trim = trim[..commentIndex].TrimEnd();
         }
 
         //field
         var colonIndex = trim.IndexOf(':');
-        var field = colonIndex < 0 ? string.Empty : trim.Substring(0, colonIndex);
+        var field = colonIndex < 0 ? string.Empty : trim[..colonIndex];
 
         Field = field.Trim();
 
@@ -56,7 +56,7 @@ internal class RobotsLine
 
         //value
         var seperatorIndex = field.Length;
-        Value = seperatorIndex + 1 < trim.Length ? trim.Substring(seperatorIndex + 1).Trim() : string.Empty;
+        Value = seperatorIndex + 1 < trim.Length ? trim[(seperatorIndex + 1)..].Trim() : string.Empty;
     }
 
     static LineType GetLineType(string field)

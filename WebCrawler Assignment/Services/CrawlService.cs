@@ -10,28 +10,28 @@ namespace WebCrawler.Services;
 
 public sealed class CrawlService : ICrawlService
 {
-    private readonly RobotsService _robotsService = new RobotsService();
+    private readonly RobotsService _robotsService = new();
     private readonly ConcurrentDictionary<string, byte> _visited = new();
-    private readonly ConcurrentBag<ExtractedPage> _fetchedPages = new();
-    private ConcurrentDictionary<Uri, CrawlUrlState> _crawlStates = new();
+    private readonly ConcurrentBag<ExtractedPage> _fetchedPages = [];
+    private readonly ConcurrentDictionary<Uri, CrawlUrlState> _crawlStates = new();
 
-    private readonly List<string> _collectedHtml = new List<string>();
-    private readonly List<string> _collectedText = new List<string>();
-    private readonly List<string> _collectedInternalLinks = new List<string>();
-    private readonly List<string> _collectedExternalLinks = new List<string>();
+    private readonly List<string> _collectedHtml = [];
+    private readonly List<string> _collectedText = [];
+    private readonly List<string> _collectedInternalLinks = [];
+    private readonly List<string> _collectedExternalLinks = [];
 
-    private readonly CrawlerSettings _crawlSettings = new CrawlerSettings();
+    private readonly CrawlerSettings _crawlSettings = new();
 
-    private readonly Stopwatch _stopwatch = new Stopwatch();
+    private readonly Stopwatch _stopwatch = new();
 
     private readonly SeleniumPageHandler _pageHandler;
 
-    private readonly HtmlExtractor _htmlExtractor = new HtmlExtractor();
+    private readonly HtmlExtractor _htmlExtractor = new();
 
-    private readonly HttpClient _httpClient = new HttpClient();
+    private readonly HttpClient _httpClient = new();
 
-    private RequestProcessor _requestProcessor = new();
-    private SiteMapService _siteMapService;
+    private readonly RequestProcessor _requestProcessor = new();
+    private readonly SiteMapService _siteMapService;
 
     private Uri? _baseUri;
 
@@ -46,13 +46,11 @@ public sealed class CrawlService : ICrawlService
         string hubUrl = "http://localhost:4444/wd/hub";
         IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
         //IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox);
-        _pageHandler = new SeleniumPageHandler(driver, _httpClient);
+        _pageHandler = new SeleniumPageHandler(driver);
         _siteMapService = new SiteMapService(_httpClient);
     }
 
-    public async Task<CrawlResult> CrawlAsync(
-string url,
-CancellationToken cancellationToken)
+    public async Task<CrawlResult> CrawlAsync(string url, CancellationToken cancellationToken)
     {
         if (!(url.StartsWith("http://") || url.StartsWith("https://")))
         {
@@ -87,10 +85,10 @@ CancellationToken cancellationToken)
         {
             if (!string.IsNullOrEmpty(requestResult.HtmlContent))
             {
-                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.HtmlContent, requestResult.TextContent);
+                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.HtmlContent, requestResult.TextContent ?? string.Empty);
                 AddResult(crawlState.Location, parsedContent);
             }
-        });
+        }, cancellationToken);
 
         _stopwatch.Stop();
 
@@ -98,7 +96,7 @@ CancellationToken cancellationToken)
 
         foreach (var extractedPage in resultCrawl)
         {
-            _collectedHtml.Add(extractedPage.RawContent);
+            _collectedHtml.Add(extractedPage.HtmlContent);
             _collectedText.Add(extractedPage.Text);
             _collectedInternalLinks.AddRange(extractedPage.InternalLinks);
             _collectedExternalLinks.AddRange(extractedPage.ExternalLinks);
@@ -195,7 +193,7 @@ CancellationToken cancellationToken)
     {
         if (_crawlStates.TryGetValue(url, out var crawlState))
         {
-            var robotHeader = _robotsService.ParseHeader(content.RawContent, _crawlSettings.UserAgent);
+            var robotHeader = _robotsService.ParseHeader(content.HtmlContent, _crawlSettings.UserAgent);
             if (robotHeader.NoIndex(_crawlSettings.UserAgent))
             {
                 Log.Information("Page {Url} has been blocked by robot rules in header", url);

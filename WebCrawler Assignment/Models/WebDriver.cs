@@ -19,7 +19,7 @@ public class WebcrawlerDriver
     //Local
     public static IWebDriver CreateGridInstance(BrowserType browserType)
     {
-        IWebDriver driver = null;
+        IWebDriver driver;
 
         switch (browserType)
         {
@@ -41,6 +41,8 @@ public class WebcrawlerDriver
                 driver = new FirefoxDriver(firefoxOptions);
                 Log.Information("creating local webdriver for Firefox.");
                 break;
+            default:
+                throw new ArgumentException($"Unsupported browser type: {browserType}");
         }
 
         return driver;
@@ -49,41 +51,38 @@ public class WebcrawlerDriver
     //Using the GridHub
     public static IWebDriver CreateGridInstance(BrowserType browserType, string gridUrl)
     {
-        IWebDriver driver = null;
-        TimeSpan timeSpan = new TimeSpan(0, 3, 0);
+        IWebDriver driver;
 
         switch (browserType)
         {
             case BrowserType.Chrome:
-                ChromeOptions chromeOptions = new ChromeOptions();
+                ChromeOptions chromeOptions = new();
                 chromeOptions.AddArguments("--headless=new");
                 driver = CreateWebDriver(gridUrl, chromeOptions.ToCapabilities());
                 Log.Information("creating hub webdriver for Chrome to url {Url}.", gridUrl);
                 break;
             case BrowserType.Edge:
-                EdgeOptions edgeOptions = new EdgeOptions();
+                EdgeOptions edgeOptions = new();
                 edgeOptions.AddArguments("--headless=new");
                 driver = CreateWebDriver(gridUrl, edgeOptions.ToCapabilities());
                 Log.Information("creating hub webdriver for Edge to url {Url}.", gridUrl);
                 break;
             case BrowserType.Firefox:
-                FirefoxOptions firefoxOptions = new FirefoxOptions();
+                FirefoxOptions firefoxOptions = new();
                 firefoxOptions.AddArguments("--headless=new");
                 driver = CreateWebDriver(gridUrl, firefoxOptions.ToCapabilities());
                 Log.Information("creating hub webdriver for Firefox to url {Url}.", gridUrl);
                 break;
+            default:
+                throw new ArgumentException($"Unsupported browser type: {browserType}");
         }
 
         return driver;
     }
 
-    private static IWebDriver CreateWebDriver(string hubUrl, ICapabilities capabilities)
+    private static RemoteWebDriver CreateWebDriver(string hubUrl, ICapabilities capabilities)
     {
-        TimeSpan timeSpan = new TimeSpan(0, 3, 0);
-        return new RemoteWebDriver(
-                    new Uri(hubUrl),
-                    capabilities,
-                    timeSpan
-                );
+        TimeSpan timeSpan = new(0, 3, 0);
+        return new RemoteWebDriver(new Uri(hubUrl), capabilities, timeSpan);
     }
 }

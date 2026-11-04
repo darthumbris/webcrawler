@@ -6,7 +6,7 @@ namespace WebCrawler.Services;
 
 public class SiteMapParser
 {
-    private bool ParseSiteMapUrl(XElement node, out Uri? url)
+    private static bool ParseSiteMapUrl(XElement node, out Uri? url)
     {
         Uri? location = null;
 
@@ -35,7 +35,7 @@ public class SiteMapParser
     public async Task<FetchedSiteMap> ParseXmlSiteMapAsync(Uri siteMapUrl, StreamReader reader, CancellationToken cancellationToken)
     {
         XDocument document;
-        var fetchedSiteMap = new FetchedSiteMap(new List<Uri>(), new List<Uri>(), siteMapUrl);
+        var fetchedSiteMap = new FetchedSiteMap([], [], siteMapUrl);
 
         try
         {
@@ -88,9 +88,9 @@ public class SiteMapParser
     public async Task<FetchedSiteMap> ParsePlainTxtSiteMapAsync(Uri siteMapUrl, StreamReader reader, CancellationToken cancellationToken)
     {
         var links = new List<Uri>();
-        string line;
+        string? line;
 
-        while ((line = await reader.ReadLineAsync()) != null)
+        while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (Uri.TryCreate(line, UriKind.Absolute, out var parsedUrl))
@@ -99,6 +99,6 @@ public class SiteMapParser
             }
         }
 
-        return new FetchedSiteMap(links, new List<Uri>(), siteMapUrl);
+        return new FetchedSiteMap(links, [], siteMapUrl);
     }
 }
