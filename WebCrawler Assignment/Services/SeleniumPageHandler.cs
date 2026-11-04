@@ -38,16 +38,6 @@ public sealed class SeleniumPageHandler(IWebDriver driver)
         return result;
     }
 
-    //TODO check if the Synchrous version of ExecuteScript is needed, if not remove it
-    public async Task<string> ExecuteJavascriptSync(string javascript, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        var result = (string?)_executor.ExecuteScript(javascript);
-        
-        result = result ?? string.Empty;
-        return result;
-    }
-
     public void Quit()
     {
         _driver.Quit();

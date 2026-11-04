@@ -45,8 +45,5 @@ app.Run();
 //curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"tweakers.net\" }" https://localhost:7299/crawl
 
 
-//TODO's: 
-
-
-//custom javascript to run on the pages to check what variables are set and what is being loaded
-//3. company check doen , welke pagina's loaden om te checken of het een bedrijf is.
+//TODO 1. custom javascript to run on the pages to check what variables are set and what is being loaded
+//TODO 2. company check doen , welke pagina's loaden om te checken of het een bedrijf is.

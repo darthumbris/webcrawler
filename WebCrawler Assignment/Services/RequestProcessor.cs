@@ -39,7 +39,9 @@ namespace WebCrawler.Services
 
                 var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
 
-                //TODO execute the proper javascript here, maybe need to execute multiple?
+                //TODO execute the script here to check what variables etc are loaded (ask what the script is)
+                //and then need to know what to do with the result of that script
+
                 //this javascript will get all the text from the page, should probably add that in the processResult as well, that way the html extractor doesn't need to handle that.
                 var extractedText = await pageHandler.ExecuteJavascriptAsync("var callback = arguments[arguments.length - 1];var check = () => {callback(document.body.innerText);};check();", cancel);
 
