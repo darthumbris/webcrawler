@@ -64,7 +64,13 @@ namespace WebCrawler.Services
             catch (OperationCanceledException) when (info.Cancellation.IsCancellationRequested)
             {
                 Log.Information("Request {Url} cancelled", info.Location);
-                return null;
+                return new ProcessResult
+                {
+                    Location = info.Location,
+                    StartTime = startTime,
+                    Delay = info.Delay,
+                    ElapsedTime = info.Timer.Elapsed,
+                };
             }
             catch (Exception ex)
             {
@@ -78,7 +84,7 @@ namespace WebCrawler.Services
                     StartTime = startTime,
                     Delay = info.Delay,
                     ElapsedTime = info.Timer.Elapsed,
-
+                    Exception = ex
                 };
             }
         }
@@ -133,10 +139,8 @@ namespace WebCrawler.Services
                 foreach (var completed in completedRequests)
                 {
                     active.TryRemove(completed, out var processInfo);
-                    //request handled so need to subtract from pending
                     PendingRequests--;
 
-                    //check if request was ok
                     if (completed.IsFaulted)
                     {
                         var exception = completed.Exception;
