@@ -49,7 +49,7 @@ namespace WebCrawler.Services
 
                 info.Cancellation.ThrowIfCancellationRequested();
 
-                Log.Information("Request for {Url} completed in {ms}ms", info.Location, info.Timer.ElapsedMilliseconds);
+                Log.Information("Request for {Url} completed in {Time}ms", info.Location, info.Timer.ElapsedMilliseconds);
 
                 return new ProcessResult
                 {
@@ -76,7 +76,7 @@ namespace WebCrawler.Services
             {
                 info.Timer.Stop();
 
-                Log.Information("Request for {Url} had Exception: {Text} after {ms}ms", info.Location, ex.Message, info.Timer.ElapsedMilliseconds);
+                Log.Information("Request for {Url} had Exception: {Exception} after {Time}ms", info.Location, ex.Message, info.Timer.ElapsedMilliseconds);
 
                 return new ProcessResult
                 {
@@ -119,7 +119,7 @@ namespace WebCrawler.Services
                             Cancellation = cancellationToken,
                         };
 
-                        Log.Information("Request for {Url} starts with a delay of {ms}ms", url, requestDelay);
+                        Log.Information("Request for {Url} starts with a delay of {Time}ms", url, requestDelay);
 
                         var task = ProcessAsync(processInfo, pageHandler);
                         active.TryAdd(task, processInfo);

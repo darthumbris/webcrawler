@@ -244,7 +244,7 @@ public sealed class RobotsService
         if (IsMalformed)
             Log.Warning("robot.txt is malformed");
 
-        Log.Information("robots.txt loaded with {Count} rules and {Count} sitemaps", _globalRules.Count + _specificRules.Count, SiteMaps.Count);
+        Log.Information("robots.txt loaded with {RuleCount} rules and {SiteMapCount} sitemaps", _globalRules.Count + _specificRules.Count, SiteMaps.Count);
     }
 
     public RobotHeader ParseHeader(string html, string userAgent)
