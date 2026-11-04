@@ -47,7 +47,7 @@ namespace WebCrawler.Services
 
                 info.Cancellation.ThrowIfCancellationRequested();
 
-                Log.Information("Request completed in {ms}ms", info.Timer.ElapsedMilliseconds);
+                Log.Information("Request for {Url} completed in {ms}ms", info.Location, info.Timer.ElapsedMilliseconds);
 
                 return new ProcessResult
                 {
