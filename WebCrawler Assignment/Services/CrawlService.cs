@@ -43,9 +43,9 @@ public sealed class CrawlService : ICrawlService
         //chromeOptions.AddArguments("--headless=new"); // comment out for testing
 
         //For Local testing don't use the hubUrl
-        //string hubUrl = "http://localhost:4444/wd/hub";
-        //IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
-        IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox);
+        string hubUrl = "http://localhost:4444/wd/hub";
+        IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
+        //IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox);
         _pageHandler = new SeleniumPageHandler(driver, _httpClient);
         _siteMapService = new SiteMapService(_httpClient);
     }
@@ -85,9 +85,9 @@ CancellationToken cancellationToken)
 
         var resultCrawl = await ProcessAsync(async (requestResult, crawlState) =>
         {
-            if (!string.IsNullOrEmpty(requestResult.Content))
+            if (!string.IsNullOrEmpty(requestResult.HtmlContent))
             {
-                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.Content);
+                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.HtmlContent, requestResult.TextContent);
                 AddResult(crawlState.Location, parsedContent);
             }
         });
@@ -117,7 +117,7 @@ CancellationToken cancellationToken)
     //This is for the interal links
     private void AddLink(string url)
     {
-        var uri = new Uri(url);
+        var uri = StripFragmentUri(new Uri(url));
         if (_visited.ContainsKey(uri.ToString()))
         {
             return;
@@ -126,14 +126,24 @@ CancellationToken cancellationToken)
         AddRequest(uri);
     }
 
+    private Uri StripFragmentUri(Uri url)
+    {
+        return new UriBuilder(url)
+        {
+            Fragment = null
+        }.Uri;
+    }
+
     public void AddRequest(Uri url)
     {
-        //TODO this seems to fail sometimes when it shouldn't ? (see coppermine.nl)
-        if (!url.Host.Equals(_baseUri!.Host, StringComparison.InvariantCultureIgnoreCase))
-        //url.Host != _baseUri!.Host)
+        url = StripFragmentUri(url);        
+                
+        //TODO this seems to fail with subdomains (should allow www. and not www.) other subdomains can ignore
+        if
+            (!url.Host.Equals(_baseUri!.Host, StringComparison.InvariantCultureIgnoreCase))
+        //(url.Host != _baseUri!.Host)
         {
-            Log.Information("Request for host {Url} is not the same as base host {Url} skipping request.", url.Host, _baseUri.Host);
-            Log.Information("Request url: {Url} baseUrl {Url}", url, _baseUri);
+            Log.Information("Request for host {UrlHost} is not the same as base host {BaseUrlHost} skipping request to url {Url}", url.Host, _baseUri.Host, url);
             return;
         }
 
@@ -141,7 +151,7 @@ CancellationToken cancellationToken)
         {
             if (_fetchedPages.Count + _requestProcessor.PendingRequests == _crawlSettings.MaxPages)
             {
-                //Log.Information("Crawl limit reached {Url} will be ignored", url);
+                Log.Information("Crawl limit reached {Url} will be ignored", url);
                 return;
             }
         }
