@@ -37,20 +37,22 @@ public sealed class SeleniumPageHandler
         return _driver.PageSource;
     }
 
-    public async Task<string?> ExecuteJavascriptAsync(string javascript, CancellationToken cancellationToken)
+    public async Task<string> ExecuteJavascriptAsync(string javascript, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var result = (string?)_executor.ExecuteAsyncScript(javascript);
 
+        result = result ?? string.Empty;
         return result;
     }
 
     //TODO check if the Synchrous version of ExecuteScript is needed, if not remove it
-    public async Task<string?> ExecuteJavascriptSync(string javascript, CancellationToken cancellationToken)
+    public async Task<string> ExecuteJavascriptSync(string javascript, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var result = (string?)_executor.ExecuteScript(javascript);
-
+        
+        result = result ?? string.Empty;
         return result;
     }
 
