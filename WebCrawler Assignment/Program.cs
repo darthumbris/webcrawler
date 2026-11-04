@@ -42,8 +42,11 @@ app.MapGet("/health", () =>
 
 app.Run();
 
-//curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"tweakers.net\" }" https://localhost:7299/crawl
+//curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\" }" https://localhost:7299/crawl
 
 
 //TODO 1. custom javascript to run on the pages to check what variables are set and what is being loaded
-//TODO 2. company check doen , welke pagina's loaden om te checken of het een bedrijf is.
+//TODO 2. company check doen , welke pagina's loaden om te checken of het een bedrijf is. (Dus de prioriy check, zal dan waarschijnlijk niet via sitemap gaan
+// of sitemaps filteren eruit op bepaalde keywords) Prioriy misschien via keywords te checken en die alleen als request toevoegen.
+//TODO 3. check how it scales with the selenium hub?
+//TODO 4. check how many active selenium drivers can be run at the same time
