@@ -10,5 +10,7 @@ public interface IHTMLExtractor
 {
     Task<ExtractedPage> Extract(
         Uri baseUri,
-        string html);
+        string html,
+        string textContent
+        );
 }

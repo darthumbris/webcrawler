@@ -8,7 +8,8 @@ namespace WebCrawler.Models
         public DateTime StartTime { get; set; }
         public double Delay { get; set; }
         //stream is better instead of the whole string
-        public string Content { get; set; }
+        public string HtmlContent { get; set; }
+        public string TextContent { get; set; }
         public TimeSpan ElapsedTime { get; set; }
         public Exception Exception { get; set; }
     }
