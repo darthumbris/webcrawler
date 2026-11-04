@@ -118,12 +118,26 @@ CancellationToken cancellationToken)
     private void AddLink(string url)
     {
         var uri = StripFragmentUri(new Uri(url));
-        if (_visited.ContainsKey(uri.ToString()))
+        var visitedUrl = StripPrefix(uri);
+        if (_visited.ContainsKey(visitedUrl))
         {
             return;
         }
 
         AddRequest(uri);
+    }
+
+    private string StripPrefix(Uri url)
+    {
+        var stripped = url.ToString();
+        if (url.Scheme == Uri.UriSchemeHttp)
+        {
+            return stripped.TrimStart("http://").ToString();
+        }
+        else
+        {
+            return stripped.TrimStart("https://").ToString();
+        }
     }
 
     private Uri StripFragmentUri(Uri url)
@@ -136,12 +150,10 @@ CancellationToken cancellationToken)
 
     public void AddRequest(Uri url)
     {
-        url = StripFragmentUri(url);        
-                
-        //TODO this seems to fail with subdomains (should allow www. and not www.) other subdomains can ignore
-        if
-            (!url.Host.Equals(_baseUri!.Host, StringComparison.InvariantCultureIgnoreCase))
-        //(url.Host != _baseUri!.Host)
+        url = StripFragmentUri(url);
+
+        //TODO should only allow www as subdomain all the others can be ignored
+        if (url.Host != _baseUri!.Host)
         {
             Log.Information("Request for host {UrlHost} is not the same as base host {BaseUrlHost} skipping request to url {Url}", url.Host, _baseUri.Host, url);
             return;
@@ -156,14 +168,14 @@ CancellationToken cancellationToken)
             }
         }
 
-        _visited.TryAdd(url.ToString(), 0);
+        bool notYetVisited = _visited.TryAdd(StripPrefix(url), 0);
 
-        if (_robotsService.IsAllowed(url.ToString(), _crawlSettings.UserAgent))
+        if (notYetVisited && _robotsService.IsAllowed(url.ToString(), _crawlSettings.UserAgent))
         {
             Log.Information("Added {Url} to request queue", url);
             _requestProcessor.AddRequest(url);
         }
-        else
+        else if (notYetVisited)
         {
             Log.Information("Request for {Url} is disallowed by robots.txt file", url);
         }

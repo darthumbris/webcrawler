@@ -49,5 +49,4 @@ app.Run();
 
 
 //custom javascript to run on the pages to check what variables are set and what is being loaded
-//2. gerenderede website de text ophalen (via javascript)
 //3. company check doen , welke pagina's loaden om te checken of het een bedrijf is.
