@@ -127,7 +127,7 @@ CancellationToken cancellationToken)
         AddRequest(uri);
     }
 
-    private string StripPrefix(Uri url)
+    private static string StripPrefix(Uri url)
     {
         var stripped = url.ToString();
         if (url.Scheme == Uri.UriSchemeHttp)
@@ -140,7 +140,7 @@ CancellationToken cancellationToken)
         }
     }
 
-    private Uri StripFragmentUri(Uri url)
+    private static Uri StripFragmentUri(Uri url)
     {
         return new UriBuilder(url)
         {
@@ -148,14 +148,19 @@ CancellationToken cancellationToken)
         }.Uri;
     }
 
+    //This makes sure that only baseHost with subdomain www or www2 is allowed
+    private bool IsSameAsBaseHost(Uri url)
+    {
+        return url.Host == _baseUri!.Host || url.Host.TrimStart("www.").ToString() == _baseUri!.Host.TrimStart("www.").ToString() || _baseUri!.Host.TrimStart("www2.").ToString() == url.Host.TrimStart("www2.").ToString();
+    }
+
     public void AddRequest(Uri url)
     {
         url = StripFragmentUri(url);
 
-        //TODO should only allow www as subdomain all the others can be ignored
-        if (url.Host != _baseUri!.Host)
+        if (!IsSameAsBaseHost(url))
         {
-            Log.Information("Request for host {UrlHost} is not the same as base host {BaseUrlHost} skipping request to url {Url}", url.Host, _baseUri.Host, url);
+            Log.Information("Request for host {UrlHost} is not the same as base host {BaseUrlHost} skipping request to url {Url}", url.Host, _baseUri!.Host, url);
             return;
         }
 
@@ -270,7 +275,7 @@ CancellationToken cancellationToken)
             }
             else if ((int)response.StatusCode >= 200 && (int)response.StatusCode < 300)
             {
-                var fetchedRobotsTxt = await response.Content.ReadAsStringAsync();
+                var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 _robotsService.LoadTxt(fetchedRobotsTxt);
             }
