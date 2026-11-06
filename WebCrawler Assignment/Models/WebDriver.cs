@@ -3,7 +3,6 @@ using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Edge;
 using OpenQA.Selenium.Firefox;
 using OpenQA.Selenium.Remote;
-using Serilog;
 
 namespace WebCrawler.Models;
 
@@ -27,19 +26,16 @@ public class WebcrawlerDriver
                 var chromeOptions = new ChromeOptions();
                 chromeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage");
                 driver = new ChromeDriver(chromeOptions);
-                Log.Information("creating local webdriver for Chrome.");
                 break;
             case BrowserType.Edge:
                 var edgeOptions = new EdgeOptions();
                 edgeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage");
                 driver = new EdgeDriver(edgeOptions);
-                Log.Information("creating local webdriver for Edge.");
                 break;
             case BrowserType.Firefox:
                 var firefoxOptions = new FirefoxOptions();
                 firefoxOptions.AddArguments("--headless", "--width=1920", "--height=1080", "--disable-dev-shm-usage");
                 driver = new FirefoxDriver(firefoxOptions);
-                Log.Information("creating local webdriver for Firefox.");
                 break;
             default:
                 throw new ArgumentException($"Unsupported browser type: {browserType}");
@@ -48,37 +44,34 @@ public class WebcrawlerDriver
         return driver;
     }
 
-    //Using the GridHub
-    public static IWebDriver CreateGridInstance(BrowserType browserType, string gridUrl)
+    private static ICapabilities GetCapabilities(BrowserType browserType)
     {
-        IWebDriver driver;
-
         switch (browserType)
         {
             case BrowserType.Chrome:
                 ChromeOptions chromeOptions = new();
                 chromeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage");
-                driver = CreateWebDriver(gridUrl, chromeOptions.ToCapabilities());
-                Log.Information("creating hub webdriver for Chrome to url {Url}.", gridUrl);
-                break;
+                return chromeOptions.ToCapabilities();
             case BrowserType.Edge:
                 EdgeOptions edgeOptions = new();
                 edgeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage");
-                driver = CreateWebDriver(gridUrl, edgeOptions.ToCapabilities());
-                Log.Information("creating hub webdriver for Edge to url {Url}.", gridUrl);
-                break;
+                return edgeOptions.ToCapabilities();
             case BrowserType.Firefox:
                 FirefoxOptions firefoxOptions = new()
                 {
                     PageLoadStrategy = PageLoadStrategy.Normal
                 };
                 firefoxOptions.AddArguments("--headless", "--width=1920", "--height=1080", "--disable-dev-shm-usage");
-                driver = CreateWebDriver(gridUrl, firefoxOptions.ToCapabilities());
-                Log.Information("creating hub webdriver for Firefox to url {Url}.", gridUrl);
-                break;
+                return firefoxOptions.ToCapabilities();
             default:
                 throw new ArgumentException($"Unsupported browser type: {browserType}");
         }
+    }
+
+    //Using the GridHub
+    public static IWebDriver CreateGridInstance(BrowserType browserType, string gridUrl)
+    {
+        IWebDriver driver = CreateWebDriver(gridUrl, GetCapabilities(browserType));
 
         return driver;
     }
