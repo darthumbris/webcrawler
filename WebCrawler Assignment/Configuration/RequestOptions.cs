@@ -2,7 +2,7 @@
 {
     public class RequestOptions
     {
-        public int MaxSimultanousRequests { get; set; } = 5;
+        public int MaxSimultanousRequests { get; set; } = 15;
 
         //500ms delay between requests
         public TimeSpan RequestDelay { get; set; } = new TimeSpan(0, 0, 0, 0, 500);
