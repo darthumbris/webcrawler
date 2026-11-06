@@ -33,7 +33,6 @@ app.MapGet("/health", () =>
 {
     //Not sure what to put here?
     //TODO check what to put here
-    //maybe if the selenium driver is still running and can fetch a page, if not return unhealthy
     return Results.Ok(new
     {
         status = "healthy"
@@ -48,6 +47,7 @@ app.Run();
 //TODO 1. custom javascript to run on the pages to check what variables are set and what is being loaded
 //TODO 2. company check doen , welke pagina's loaden om te checken of het een bedrijf is. (Dus de prioriy check, zal dan waarschijnlijk niet via sitemap gaan
 // of sitemaps filteren eruit op bepaalde keywords) Prioriy misschien via keywords te checken en die alleen als request toevoegen.
-//TODO 3. check how it scales with the selenium hub?
+// en als duidelijk is dat het geen company is moeten alle overige requests gecancelled worden?
+// of is de company check pas op het einde als alle pagina's gescraped zijn?
 
 //TODO misschien ook beter de too many requests handlen (base url al?)

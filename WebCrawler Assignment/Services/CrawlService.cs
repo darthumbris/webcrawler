@@ -39,6 +39,7 @@ public sealed class CrawlService : ICrawlService
         //For Local testing don't use the hubUrl
         string hubUrl = "http://localhost:4444/wd/hub";
         _pageHandler = new SeleniumPageHandler(BrowserType.Firefox, hubUrl);
+        Log.Information("Done creating webdrivers");
         //_pageHandler = new SeleniumPageHandler(BrowserType.Firefox);
         _siteMapService = new SiteMapService(_httpClient);
     }
@@ -59,6 +60,10 @@ public sealed class CrawlService : ICrawlService
         Log.Information("Found {Count} sitemap files for domain: {Url}", sitemapFiles.Count(), url);
 
         var sitemapUrls = 0;
+
+        //TODO might be better to first sort the siteMapLinks
+        //using a priority check
+        //and then add the sorted links
         foreach (var sitemap in sitemapFiles)
         {
             foreach (var siteMapUrl in sitemap.Links)
@@ -208,6 +213,9 @@ public sealed class CrawlService : ICrawlService
 
                 if (!robotHeader.NoFollow(_crawlSettings.UserAgent))
                 {
+                    //TODO might be better to first sort the internalLinks
+                    //using a priority check
+                    //and then add the sorted links
                     foreach (var link in content.InternalLinks)
                     {
                         AddLink(link);
