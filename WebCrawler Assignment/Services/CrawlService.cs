@@ -1,5 +1,4 @@
-﻿using OpenQA.Selenium;
-using Serilog;
+﻿using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -37,16 +36,10 @@ public sealed class CrawlService : ICrawlService
 
     public CrawlService()
     {
-        //var chromeOptions = new ChromeOptions();
-        //chromeOptions.AddArguments(["--disable-infobars", "--lang=en_US", "--window-position=0,0", "--window-size=5,5"]);
-        //Some sites will disable the robots.txt loading when headless????
-        //chromeOptions.AddArguments("--headless=new"); // comment out for testing
-
         //For Local testing don't use the hubUrl
         string hubUrl = "http://localhost:4444/wd/hub";
-        IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox, hubUrl);
-        //IWebDriver driver = WebcrawlerDriver.CreateGridInstance(BrowserType.Firefox);
-        _pageHandler = new SeleniumPageHandler(driver);
+        _pageHandler = new SeleniumPageHandler(BrowserType.Firefox, hubUrl);
+        //_pageHandler = new SeleniumPageHandler(BrowserType.Firefox);
         _siteMapService = new SiteMapService(_httpClient);
     }
 
@@ -61,6 +54,7 @@ public sealed class CrawlService : ICrawlService
         Log.Information("Starting crawl for domain: {Url}", url);
         await LoadRobot(url, cancellationToken);
 
+        AddRequest(_baseUri);
         var sitemapFiles = await _siteMapService.FetchSiteMapsAsync(url, _robotsService.SiteMaps, cancellationToken);
         Log.Information("Found {Count} sitemap files for domain: {Url}", sitemapFiles.Count(), url);
 
@@ -79,7 +73,6 @@ public sealed class CrawlService : ICrawlService
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
 
         Log.Information("Crawl delay set to: {Delay} seconds", delay.TotalSeconds);
-        AddRequest(_baseUri);
 
         var resultCrawl = await ProcessAsync(async (requestResult, crawlState) =>
         {
@@ -88,9 +81,15 @@ public sealed class CrawlService : ICrawlService
                 var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.HtmlContent, requestResult.TextContent ?? string.Empty);
                 AddResult(crawlState.Location, parsedContent);
             }
+            else
+            {
+                Log.Warning("Request for {Url} returned no content", crawlState.Location);
+            }
         }, cancellationToken);
 
         _stopwatch.Stop();
+
+        Log.Information("Crawl completed for domain: {Url} in {Time} seconds with {Count} pages fetched, visited urls {Urls} {CountVisited}", url, _stopwatch.Elapsed.TotalSeconds, _fetchedPages.Count, string.Join(", ", _visited.Keys), _visited.Count);
 
         _pageHandler.Quit();
 
@@ -182,6 +181,10 @@ public sealed class CrawlService : ICrawlService
         {
             Log.Information("Request for {Url} is disallowed by robots.txt file", url);
         }
+        else
+        {
+            Log.Warning("Request for {Url} was already handled. Will not add again.", url);
+        }
     }
 
     public void AddResult(ExtractedPage page)
@@ -202,6 +205,7 @@ public sealed class CrawlService : ICrawlService
             {
                 Log.Information("Sucesfully extracted request from {Url}.", url);
                 AddResult(content);
+
                 if (!robotHeader.NoFollow(_crawlSettings.UserAgent))
                 {
                     foreach (var link in content.InternalLinks)

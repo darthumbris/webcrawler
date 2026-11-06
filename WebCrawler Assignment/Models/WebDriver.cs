@@ -68,9 +68,10 @@ public class WebcrawlerDriver
                 Log.Information("creating hub webdriver for Edge to url {Url}.", gridUrl);
                 break;
             case BrowserType.Firefox:
-                FirefoxOptions firefoxOptions = new();
-                firefoxOptions.PageLoadStrategy = PageLoadStrategy.Normal;
-                Log.Information("pageloadstrategy: {Strategy}", firefoxOptions.PageLoadStrategy);
+                FirefoxOptions firefoxOptions = new()
+                {
+                    PageLoadStrategy = PageLoadStrategy.Normal
+                };
                 firefoxOptions.AddArguments("--headless", "--width=1920", "--height=1080", "--disable-dev-shm-usage");
                 driver = CreateWebDriver(gridUrl, firefoxOptions.ToCapabilities());
                 Log.Information("creating hub webdriver for Firefox to url {Url}.", gridUrl);

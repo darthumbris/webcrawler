@@ -22,5 +22,7 @@ namespace WebCrawler.Models
         //So can cancel each request
         public CancellationToken Cancellation { get; set; }
         public Double Delay { get; set; }
+
+        public required int DriverIndex { get; set; }
     }
 }
