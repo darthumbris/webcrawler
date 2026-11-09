@@ -1,6 +1,7 @@
 ﻿using HtmlAgilityPack;
 using Serilog;
 using System.Globalization;
+using System.Net;
 using WebCrawler.Models;
 
 namespace WebCrawler.Services;
@@ -154,6 +155,29 @@ public sealed class RobotsService
     public bool HasRobotRules { get; private set; }
 
     public RobotsService() { }
+
+    public async Task LoadRobotTxt(string url, HttpClient httpClient, CancellationToken cancellationToken)
+    {
+        if (!(url.StartsWith("http://") || url.StartsWith("https://")))
+        {
+            url = "https://" + url;
+        }
+        var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
+
+        using var response = await httpClient.GetAsync(robotsUrl, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            Log.Information("No robots.txt found for {Url}. Assuming all pages are allowed.", robotsUrl);
+        }
+        else if ((int)response.StatusCode >= 200 && (int)response.StatusCode < 300)
+        {
+            var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            LoadTxt(fetchedRobotsTxt);
+        }
+    }
 
     public void LoadTxt(string content)
     {
