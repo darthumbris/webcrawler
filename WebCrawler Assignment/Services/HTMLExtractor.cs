@@ -45,4 +45,34 @@ public class HtmlExtractor : IHTMLExtractor
 
         return new ExtractedPage(html, textContent, internalLinks, externalLinks);
     }
+
+    public IReadOnlyCollection<string> ExtractInternalLinks(Uri baseUri, HtmlDocument doc)
+    {
+        var links = doc.DocumentNode.SelectNodes("//a[@href]");
+        var internalLinks = new HashSet<string>();
+
+        if (links != null)
+        {
+            foreach (var link in links)
+            {
+                var href = link.GetAttributeValue("href", string.Empty);
+                if (string.IsNullOrEmpty(href))
+                {
+                    continue;
+                }
+
+                if (Uri.TryCreate(baseUri, href, out Uri? resultUri))
+                {
+                    if (resultUri == null)
+                        continue;
+                    if (resultUri.Host == baseUri.Host)
+                    {
+                        internalLinks.Add(resultUri.ToString());
+                    }
+                }
+            }
+        }
+
+        return internalLinks;
+    }
 }
