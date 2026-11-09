@@ -43,6 +43,19 @@ public sealed class SeleniumPageHandler
         }
     }
 
+
+    public SeleniumPageHandler(BrowserType browser, string hubUrl, int requests)
+    {
+        requests = Math.Min(requests, _requestOptions.MaxSimultanousRequests);
+        Log.Information("Creating {Count} remote webdrivers for browser {BrowserType} to hub {Url}", requests, browser, hubUrl);
+        for (int i = 0; i < requests; i++)
+        {
+            var driver = WebcrawlerDriver.CreateGridInstance(browser, hubUrl);
+            _executors.Add((IJavaScriptExecutor)driver);
+            _drivers.Add(driver);
+        }
+    }
+
     private readonly List<IWebDriver> _drivers = [];
     private readonly RequestOptions _requestOptions = new();
     private readonly List<IJavaScriptExecutor> _executors = [];
@@ -59,11 +72,6 @@ public sealed class SeleniumPageHandler
         //TODO now only problem is with stuff like 429 too many requests can't be detected with selenium
         //but if checked using the httpclient it might not happen (because they use botdetection)
         //don't know how or if to handle that part?
-        var currentUrl = driver.Url;
-        if (currentUrl != url)
-        {
-            Log.Information("url {Url} was redirected to {CurrentUrl}", url, currentUrl);
-        }
 
         return driver.PageSource;
     }
