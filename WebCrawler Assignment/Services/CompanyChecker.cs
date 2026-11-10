@@ -16,22 +16,21 @@ public class CompanyChecker : ICompanyChecker
     private Uri? _baseUri;
 
     private int _score;
-    private List<CompanyCheckReason> _reasons = [];
+    private readonly List<CompanyCheckReason> _reasons = [];
 
     public CompanyChecker()
     {
         Log.Information("created new CompanyChecker class");
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
     }
-
-    //public RobotsService GetRobotsService()
-    //{
-
-    //}
 
     public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, CancellationToken cancellationToken)
     {
         _score = 0;
         _reasons.Clear();
+        _robotsService.Reset();
+
+        Log.Information("domainUrl: {Url}", domainUrl);
 
         if (!(domainUrl.StartsWith("http://") || domainUrl.StartsWith("https://")))
         {
@@ -45,16 +44,15 @@ public class CompanyChecker : ICompanyChecker
 
         await _robotsService.LoadRobotTxt(domainUrl, _httpClient, cancellationToken);
 
-        if (!_robotsService.IsAllowed(domainUrl, _crawlSettings.UserAgent))
+        if (!_robotsService.IsAllowed(_baseUri.LocalPath, _crawlSettings.UserAgent))
         {
             Log.Information("Robot disallows checking {Url} stopping company check.", domainUrl);
             pageHandler.Quit();
             return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotRefusal]);
         }
 
-        Log.Information("Checking if {Url} is a company website", domainUrl);
-
         var html = await pageHandler.FetchPageAsync(domainUrl, 0, cancellationToken);
+
         pageHandler.Quit();
 
         if (string.IsNullOrEmpty(html))
@@ -94,6 +92,7 @@ public class CompanyChecker : ICompanyChecker
 
         if (nodes == null || nodes.Count == 0)
         {
+            Log.Information("Found no footers.");
             return;
         }
 
@@ -109,20 +108,21 @@ public class CompanyChecker : ICompanyChecker
         foreach (var footer in footerText)
         {
             //legal entity check
-            if (footer.Contains("B.V.", StringComparison.Ordinal) ||
-                footer.Contains("N.V.", StringComparison.Ordinal) ||
-                footer.Contains("Ltd.", StringComparison.Ordinal) ||
-                footer.Contains("V.O.F.", StringComparison.Ordinal) ||
-                footer.Contains("GmbH", StringComparison.Ordinal))
+            if (footer.Contains("B.V.", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("N.V.", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("Ltd.", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("V.O.F.", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("Inc", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("GmbH", StringComparison.OrdinalIgnoreCase))
             {
                 Log.Information("Found {Text} as a legal entity indicator", footer);
                 footerScore += 3;
             }
 
             //Kvk number
-            if (footer.Contains("KvK", StringComparison.Ordinal) || 
-                footer.Contains("BTW", StringComparison.Ordinal) ||
-                footer.Contains("VAT", StringComparison.Ordinal))
+            if (footer.Contains("KvK", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("BTW", StringComparison.OrdinalIgnoreCase) ||
+                footer.Contains("VAT", StringComparison.OrdinalIgnoreCase))
             {
                 Log.Information("Found {Text} as a company indicator", footer);
                 footerScore += 5;
@@ -130,9 +130,9 @@ public class CompanyChecker : ICompanyChecker
 
         }
 
+        Log.Information("Footer contained {Count} company indicators", footerScore);
         if (footerScore > 0)
         {
-            Log.Information("Footer contained {Count} company indicators", footerScore);
             _reasons.Add(CompanyCheckReason.CompanyFooterCheck);
         }
         _score += Math.Min(footerScore, 5);
@@ -144,6 +144,7 @@ public class CompanyChecker : ICompanyChecker
         Log.Information("Checking for schema.org structured json.");
         if (doc.DocumentNode == null)
         {
+            Log.Information("Failed to check shema.org structured json because document is corrupted.");
             return;
         }
 
@@ -151,12 +152,15 @@ public class CompanyChecker : ICompanyChecker
 
         if (nodes == null || nodes.Count == 0)
         {
+            Log.Information("Found no schema.org.");
             return;
         }
 
         var scripts = nodes.Select(script => script.InnerText);
 
         var schemas = _schemaParser.Parse(scripts);
+
+        var schemaScore = 0;
 
         foreach (var schema in schemas)
         {
@@ -169,15 +173,14 @@ public class CompanyChecker : ICompanyChecker
                     schema.SchemaType.Equals("Restaurant", StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Information("Found {Type} as high company indicator", schema.SchemaType);
-                    _score += 10;
-                    _reasons.Add(CompanyCheckReason.CompanyJsonCheck);
+                    schemaScore += 10;
                     return;
                 }
                 else if (schema.SchemaType.Equals("Organization", StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Information("Found {Type} as minor indicator", schema.SchemaType);
-                    _score += 1;
-                    _reasons.Add(CompanyCheckReason.CompanyJsonCheck);
+                    schemaScore += 1;
+
                     return;
                 }
             }
@@ -185,8 +188,15 @@ public class CompanyChecker : ICompanyChecker
             if (schema.StreetAddress != null)
             {
                 Log.Information("Address found in schema");
-                _score += 1;
+                schemaScore += 1;
             }
+        }
+
+        Log.Information("Found {Count} indicator score for company in the schema.org json", schemaScore);
+        _score += schemaScore;
+        if (schemaScore > 1)
+        {
+            _reasons.Add(CompanyCheckReason.CompanyJsonCheck);
         }
     }
 
@@ -206,7 +216,8 @@ public class CompanyChecker : ICompanyChecker
                 link.Contains("privacy", StringComparison.OrdinalIgnoreCase) ||
                 link.Contains("contact", StringComparison.OrdinalIgnoreCase) ||
                 link.Contains("services", StringComparison.OrdinalIgnoreCase) ||
-                link.Contains("info", StringComparison.OrdinalIgnoreCase)
+                link.Contains("info", StringComparison.OrdinalIgnoreCase) ||
+                link.Contains("over", StringComparison.OrdinalIgnoreCase)
                 )
             {
                 pageScore += 1;
