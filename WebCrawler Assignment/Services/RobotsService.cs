@@ -150,11 +150,23 @@ public sealed class RobotsService
 
     public List<SiteMap> SiteMaps { get; private set; } = [];
 
-    public bool IsDisallowed { get; private set; }
+    public bool HasDisallowed { get; private set; }
     public bool IsMalformed { get; private set; }
     public bool HasRobotRules { get; private set; }
 
     public RobotsService() { }
+
+    public void Reset()
+    {
+        _globalRules.Clear();
+        _specificRules.Clear();
+        _crawlDelayRules.Clear();
+        SiteMaps.Clear();
+
+        HasDisallowed = false;
+        IsMalformed = false;
+        HasRobotRules = false;
+    }
 
     public async Task LoadRobotTxt(string url, HttpClient httpClient, CancellationToken cancellationToken)
     {
@@ -164,6 +176,7 @@ public sealed class RobotsService
         }
         var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
 
+        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
         using var response = await httpClient.GetAsync(robotsUrl, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -181,12 +194,9 @@ public sealed class RobotsService
 
     public void LoadTxt(string content)
     {
-        _globalRules.Clear();
-        _specificRules.Clear();
-        _crawlDelayRules.Clear();
-
         if (string.IsNullOrWhiteSpace(content))
         {
+            Log.Information("Robots.txt is empty. Assuming all pages are allowed.");
             return;
         }
 
@@ -231,7 +241,7 @@ public sealed class RobotsService
                         }
                         if (rule.IsAnyPathDisallowed())
                         {
-                            IsDisallowed = true;
+                            HasDisallowed = true;
                         }
                     }
                     else
@@ -320,7 +330,7 @@ public sealed class RobotsService
         string url,
         string userAgent)
     {
-        if (!IsDisallowed || !HasRobotRules)
+        if (!HasDisallowed || !HasRobotRules)
         {
             return true;
         }

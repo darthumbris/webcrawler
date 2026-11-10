@@ -3,11 +3,17 @@
 using Serilog;
 using System.Net;
 
-public sealed class SiteMapService(HttpClient httpClient)
+public sealed class SiteMapService
 {
 
-    private readonly HttpClient _httpClient = httpClient;
+    private readonly HttpClient _httpClient;
     private static readonly SiteMapParser _siteMapParser = new();
+
+    public SiteMapService(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
+    }
 
     private async Task<IEnumerable<Uri>> LoadSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {

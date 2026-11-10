@@ -177,7 +177,7 @@ public sealed class CrawlService : ICrawlService
 
         bool notYetVisited = _visited.TryAdd(StripPrefix(url), 0);
 
-        if (notYetVisited && _robotsService.IsAllowed(url.ToString(), _crawlSettings.UserAgent))
+        if (notYetVisited && _robotsService.IsAllowed(url.LocalPath, _crawlSettings.UserAgent))
         {
             Log.Information("Added {Url} to request queue", url);
             _requestProcessor.AddRequest(url);
