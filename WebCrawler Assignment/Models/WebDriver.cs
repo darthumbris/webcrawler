@@ -1,4 +1,5 @@
-﻿using OpenQA.Selenium;
+﻿using Microsoft.Extensions.Options;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Edge;
 using OpenQA.Selenium.Firefox;
@@ -24,7 +25,7 @@ public class WebcrawlerDriver
         {
             case BrowserType.Chrome:
                 var chromeOptions = new ChromeOptions();
-                chromeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage");
+                chromeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled");
                 driver = new ChromeDriver(chromeOptions);
                 break;
             case BrowserType.Edge:
@@ -50,7 +51,9 @@ public class WebcrawlerDriver
         {
             case BrowserType.Chrome:
                 ChromeOptions chromeOptions = new();
-                chromeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage");
+                chromeOptions.AddArguments("--headless=new", "--window-size=1920,1080", "--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled");
+                chromeOptions.AddExcludedArgument("enable-automation");
+                chromeOptions.AddAdditionalChromeOption("useAutomationExtension", "False");
                 return chromeOptions.ToCapabilities();
             case BrowserType.Edge:
                 EdgeOptions edgeOptions = new();
@@ -79,6 +82,7 @@ public class WebcrawlerDriver
     private static RemoteWebDriver CreateWebDriver(string hubUrl, ICapabilities capabilities)
     {
         TimeSpan timeSpan = new(0, 3, 0);
+
         return new RemoteWebDriver(new Uri(hubUrl), capabilities, timeSpan);
     }
 }
