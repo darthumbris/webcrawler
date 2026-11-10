@@ -1,20 +1,22 @@
 ﻿namespace WebCrawler.Models;
 
-//TODO what kind of object for the reason
-//text etc?
+//TODO what reasons to add and how to word properly?
 public enum CompanyCheckReason
 {
     RobotRefusal,
-    IsNotCompany,
+    ConfidenceScoreTooLow,
     ParseFailure,
     CompanyFooterCheck,
     CompanyJsonCheck,
     CompanyPagesCheck,
+    CompanyScoreThreshold,
+    IsNotCompanyIndicatorFound,
+    ParkingIndicator,
 }
 
 public sealed record CompanyCheckResult
 (
     bool IsCompany,
     int ConfidenceScore,
-    List<CompanyCheckReason> Reasons
+    List<string> Reasons
 );

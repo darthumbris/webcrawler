@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Serilog;
 
 namespace WebCrawler.Models
 {
@@ -48,7 +49,7 @@ namespace WebCrawler.Models
 
             var type = GetString(el, "@type");
 
-            if (IsCompanyType(type))
+            if (IsCompanyType(type) || IsCompanyExclusion(type))
             {
                 result.Add(new StructuredCompanyData
                 {
@@ -112,11 +113,22 @@ namespace WebCrawler.Models
             if (type is null)
                 return false;
 
-            return type.Split(',')
-                .Any(t => t.Trim().Split('/').Last() is
-                    "Organization" or
-                    "Corporation" or
-                    "LocalBusiness" or "Store" or "ProfessionalService" or "Restaurant");
+            var types = type.Split(',');
+            return types.Any(type =>
+            {
+                type = type.Trim().Split('/').Last();
+                return StructuredCompanyData.IsCompanyType(type) || StructuredCompanyData.IsMaybeCompanyType(type);
+            });
+        }
+
+        //these types exclude it being a company
+        private static bool IsCompanyExclusion(string? type)
+        {
+            if (type is null)
+                return false;
+
+            var types = type.Split(',');
+            return types.Any(type => StructuredCompanyData.IsNotCompanyType(type.Trim().Split('/').Last()));
         }
 
     }
