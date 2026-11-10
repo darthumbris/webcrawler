@@ -1,7 +1,6 @@
 ﻿using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
