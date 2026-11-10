@@ -15,7 +15,8 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 var app = builder.Build();
 
-app.MapPost("/company", async (CrawlRequest request, CancellationToken cancellationToken) => {
+app.MapPost("/company", async (CrawlRequest request, CancellationToken cancellationToken) =>
+{
     Log.Information("Company Check end point.");
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
@@ -30,7 +31,7 @@ app.MapPost("/crawl", async (
     ICrawlService crawler,
     CancellationToken cancellationToken) =>
 {
-    Log.Information("Post endpoint trying domain: {Url}", request.DomainName);
+    Log.Information("Crawl endpoint trying domain: {Url}", request.DomainName);
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
@@ -62,19 +63,8 @@ app.Run();
 // of is de company check pas op het einde als alle pagina's gescraped zijn?
 
 //TODO misschien ook beter de too many requests handlen (base url al?)
-
-
-//als robot tegenhoud stoppen
-//return de reden
-
-//preliminary company check
-//als duidelijk geen company meteen stoppen
-//dan returnen reden dat je stopte
-//dan later uitgebreide offline check (met llm)
-
-
-//crawlresult moet dan misschien ook een Responce code hebben
-
+//TODO voor crawlservice waarschijnlijk een priority systeem
+//waarbij bijvoorbeeld dingen als about page etc als eerst worden gecrawled?
 
 //misschien de crawler een sessie openen met de programma die de checks uitvoert
 //en dan aan de hand van de result verder of stoppen met crawlen.
@@ -90,4 +80,8 @@ app.Run();
 //rest command om js uit te voeren? (of moet dit in de crawl gedeelte)
 
 //moet dan denk ik bepaalde volgorde inzitten van de commands?
-//
+// 0.? Misschien als eerste een robot check?
+// 1. preliminary company check
+// 2. crawl misschien bepaalde pagina's
+// 3. LLM check of company is
+// 4. Crawl de rest van de site
