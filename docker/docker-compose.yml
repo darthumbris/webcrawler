@@ -52,4 +52,4 @@ services:
     environment:
       - GRID_MAX_SESSION=16
       - GRID_BROWSER_TIMEOUT=60
-      - GRID_TIMEOUT=60
+      - GRID_TIMEOUT=3000
