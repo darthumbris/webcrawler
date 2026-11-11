@@ -4,14 +4,17 @@
 public enum CompanyCheckReason
 {
     RobotRefusal,
-    ConfidenceScoreTooLow,
     ParseFailure,
-    CompanyFooterCheck,
-    CompanyJsonCheck,
-    CompanyPagesCheck,
-    CompanyScoreThreshold,
-    IsNotCompanyIndicatorFound,
-    ParkingIndicator,
+    CompanyFooterIndicationFound,
+    NotCompanyFooterIndicationFound,
+    CompanyJsonIndicationFound,
+    NotCompanyJsonIndicationFound,
+    CompanyPagesIndicationFound,
+    NotCompanyPagesIndicationFound,
+    ConfidenceScoreTooLow,
+    ConfidenceScoreMedium,
+    ConfidenceScoreHigh,
+    ParkingIndicatorFound,
 }
 
 public sealed record CompanyCheckResult

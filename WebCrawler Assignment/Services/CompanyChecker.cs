@@ -1,5 +1,4 @@
 ﻿using HtmlAgilityPack;
-using OpenQA.Selenium.BiDi.BrowsingContext;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
@@ -65,29 +64,28 @@ public class CompanyChecker : ICompanyChecker
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
-        CheckCompanyPages(doc);
-        CheckFooter(doc);
-        CheckStructuredJson(doc);
-        CheckIfParkedOrPlaceHolder(text);
-        //TODO figure out if need more checks
-        //TODO figure out good score values and also what score classifies the confidence
-        //i.e. score of 70: Strong company indication
-        //              40-69: Likely company
-        //              20-39: Uncertain
-        //              0-19: unlikely company
-        //              < 0 : Strong non-company indication
+        bool parked = CheckIfParkedOrPlaceHolder(text);
+        if (!parked)
+        {
+            CheckCompanyPages(doc);
+            CheckFooter(doc);
+            CheckStructuredJson(doc);
+        }
 
         if (_score <= 5)
         {
             Log.Information("Score {Score} too low to be sure that {Url} is company.", _score, _baseUri);
             _reasons.Insert(0, CompanyCheckReason.ConfidenceScoreTooLow.ToString());
-        } else if (_score > 5 && _score < 10)
+        }
+        else if (_score > 5 && _score < 10)
         {
             Log.Information("Score {Score} high enough to determine that {Url} might be a company.", _score, _baseUri);
-        } else
+            _reasons.Insert(0, CompanyCheckReason.ConfidenceScoreMedium.ToString());
+        }
+        else
         {
             Log.Information("Score {Score} high enough to be decently sure that {Url} is most likely a company.", _score, _baseUri);
-            _reasons.Add(CompanyCheckReason.CompanyScoreThreshold.ToString());
+            _reasons.Add(CompanyCheckReason.ConfidenceScoreHigh.ToString());
         }
 
         var result = new CompanyCheckResult
@@ -122,50 +120,59 @@ public class CompanyChecker : ICompanyChecker
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .ToList();
 
-        var footerScore = 0;
+        var footerCompanyIndicators = 0;
+        var footerNotCompanyIndicators = 0;
+
+        List<string> companyWords = ["commerce", "customer", "subscription", "shipping", "enterprise"];
+        List<string> nonCompanyWords = ["wordpress", "charity"];
 
         foreach (var footer in footerText)
         {
-            //legal entity check
             if (footer.Contains("B.V.", StringComparison.InvariantCultureIgnoreCase) ||
                 footer.Contains("N.V.", StringComparison.InvariantCultureIgnoreCase) ||
                 footer.Contains("Ltd.", StringComparison.InvariantCultureIgnoreCase) ||
                 footer.Contains("V.O.F.", StringComparison.InvariantCultureIgnoreCase) ||
                 footer.Contains("Inc", StringComparison.InvariantCultureIgnoreCase) ||
-                footer.Contains("GmbH", StringComparison.InvariantCultureIgnoreCase) ||
-                footer.Contains("©", StringComparison.InvariantCultureIgnoreCase))
+                footer.Contains("GmbH", StringComparison.InvariantCultureIgnoreCase))
             {
-                Log.Information("Found {Text} as a legal entity indicator", footer);
-                footerScore += 3;
+                _score += 3;
+                footerCompanyIndicators += 1;
             }
-
-            //Kvk number
             if (footer.Contains("KvK", StringComparison.InvariantCultureIgnoreCase) ||
                 footer.Contains("BTW", StringComparison.InvariantCultureIgnoreCase) ||
                 footer.Contains("VAT", StringComparison.InvariantCultureIgnoreCase))
             {
-                Log.Information("Found {Text} as a company indicator", footer);
-                footerScore += 5;
+                _score += 5;
+                footerCompanyIndicators += 1;
             }
-
-            if (
-                footer.Contains("commerce", StringComparison.InvariantCultureIgnoreCase) ||
-                footer.Contains("customer", StringComparison.InvariantCultureIgnoreCase) ||
-                footer.Contains("subscription", StringComparison.InvariantCultureIgnoreCase) ||
-                footer.Contains("shipping", StringComparison.InvariantCultureIgnoreCase)
-                )
+            foreach (var companyWord in companyWords)
             {
-                Log.Information("Found {Text} as a company indicator", footer);
-                footerScore += 1;
+                if (footer.Contains(companyWord, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    _score += 2;
+                    footerCompanyIndicators += 1;
+                }
+            }
+
+            foreach (var nonCompanyWord in nonCompanyWords)
+            {
+                if (footer.Contains(nonCompanyWord, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    _score -= 2;
+                    footerNotCompanyIndicators += 1;
+                }
             }
         }
 
-        Log.Information("Footer contained {Count} company indicators", footerScore);
-        if (footerScore > 0)
+        Log.Information("Footer contained {Count} company indicators and {NotCount} NonCompany indicators", footerCompanyIndicators, footerNotCompanyIndicators);
+        if (footerCompanyIndicators > 0 && footerCompanyIndicators >= footerNotCompanyIndicators)
         {
-            _reasons.Add(CompanyCheckReason.CompanyFooterCheck.ToString());
+            _reasons.Add(CompanyCheckReason.CompanyFooterIndicationFound.ToString());
         }
-        _score += Math.Min(footerScore, 5);
+        if (footerNotCompanyIndicators > 0)
+        {
+            _reasons.Add(CompanyCheckReason.NotCompanyFooterIndicationFound.ToString());
+        }
     }
 
     //This checks if the url contains JSON-LD containing schema.org organization etc stuff
@@ -190,48 +197,52 @@ public class CompanyChecker : ICompanyChecker
 
         var schemas = _schemaParser.Parse(scripts);
 
-        var schemaScore = 0;
+        var schemaCompanyIndicators = 0;
+        var schemaNonCompanyIndicators = 0;
 
         bool organizationChecked = false;
+        bool isNotCompanyChecked = false;
 
         foreach (var schema in schemas)
         {
             if (StructuredCompanyData.IsCompanyType(schema.SchemaType))
             {
-                Log.Information("Found {Type} as high company indicator", schema.SchemaType);
-                schemaScore += 10;
-                break;
+                _score += 10;
+                schemaCompanyIndicators += 1;
             }
-            if (StructuredCompanyData.IsMaybeCompanyType(schema.SchemaType) && !organizationChecked) {
-                Log.Information("Found {Type} as minor indicator", schema.SchemaType);
-                schemaScore += 1;
+            if (StructuredCompanyData.IsMaybeCompanyType(schema.SchemaType) && !organizationChecked)
+            {
+                schemaCompanyIndicators += 1;
+                _score += 2;
                 organizationChecked = true;
             }
-            if (StructuredCompanyData.IsNotCompanyType(schema.SchemaType))
-            {
-                Log.Information("Found indication {Type} that website is not a company", schema.SchemaType);
-                _score = 0;
-                _reasons.Add(CompanyCheckReason.IsNotCompanyIndicatorFound.ToString());
-                return;
-            }
-
             if (schema.StreetAddress != null)
             {
-                Log.Information("Address found in schema");
-                schemaScore += 1;
+                _score += 1;
+                schemaCompanyIndicators += 1;
+            }
+
+            if (StructuredCompanyData.IsNotCompanyType(schema.SchemaType) && !isNotCompanyChecked)
+            {
+                _score -= 10;
+                schemaNonCompanyIndicators += 1;
+                isNotCompanyChecked = true;
             }
             if (schema.Email != null && schema.Email.EndsWith("gmail.com", StringComparison.InvariantCultureIgnoreCase))
             {
-                Log.Information("g-mail.com for e-mail found. Indicates not a company.");
-                schemaScore -= 3;
+                _score -= 3;
+                schemaNonCompanyIndicators += 1;
             }
         }
 
-        Log.Information("Found {Count} indicator score for company in the schema.org json", schemaScore);
-        _score += schemaScore;
-        if (schemaScore > 1)
+        Log.Information("Found {Count} company indicators and {NonCount} non company indicators in the schema.org json", schemaCompanyIndicators, schemaNonCompanyIndicators);
+        if (schemaCompanyIndicators > 0 && schemaCompanyIndicators >= schemaNonCompanyIndicators)
         {
-            _reasons.Add(CompanyCheckReason.CompanyJsonCheck.ToString());
+            _reasons.Add(CompanyCheckReason.CompanyJsonIndicationFound.ToString());
+        }
+        else if (schemaNonCompanyIndicators > 0)
+        {
+            _reasons.Add(CompanyCheckReason.NotCompanyJsonIndicationFound.ToString());
         }
     }
 
@@ -242,38 +253,51 @@ public class CompanyChecker : ICompanyChecker
         Log.Information("Checking internal links for company like pages");
         var internalLinks = _htmlExtractor.ExtractInternalLinks(_baseUri!, doc);
 
-        var pageScore = 0;
+        var companyPageIndicators = 0;
+        var nonCompanyPageIndicators = 0;
 
         foreach (var link in internalLinks)
         {
-            //TODO think of more indicators
             if (link.Contains("about", StringComparison.InvariantCultureIgnoreCase) ||
                 link.Contains("privacy", StringComparison.InvariantCultureIgnoreCase) ||
                 link.Contains("contact", StringComparison.InvariantCultureIgnoreCase) ||
                 link.Contains("services", StringComparison.InvariantCultureIgnoreCase) ||
                 link.Contains("info", StringComparison.InvariantCultureIgnoreCase) ||
-                link.Contains("over", StringComparison.InvariantCultureIgnoreCase)
+                link.Contains("over", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("checkout", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("cart", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("winkelwagen", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("shop", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("product", StringComparison.InvariantCultureIgnoreCase)
                 )
             {
-                pageScore += 1;
+                companyPageIndicators += 1;
+                _score += 1;
             }
-
-            //TODO check if there are certain links that would indicate it not being a company?
+            if (link.Contains("resume", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("cv", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("about-me", StringComparison.InvariantCultureIgnoreCase) ||
+                link.Contains("blog", StringComparison.InvariantCultureIgnoreCase)
+                )
+            {
+                nonCompanyPageIndicators += 1;
+                _score -= 1;
+            }
         }
 
-        Log.Information("Found {Count} company indicator pages", pageScore);
+        Log.Information("Found {Count} company indicator pages and {NonCount} non company indicator pages", companyPageIndicators, nonCompanyPageIndicators);
 
-        if (pageScore > 0)
+        if (companyPageIndicators > 0 && companyPageIndicators >= nonCompanyPageIndicators)
         {
-            _reasons.Add(CompanyCheckReason.CompanyPagesCheck.ToString());
+            _reasons.Add(CompanyCheckReason.CompanyPagesIndicationFound.ToString());
         }
-
-        //This so that it doesn't increase the score too much
-        _score += Math.Min(pageScore, 3);
+        else if (nonCompanyPageIndicators > 0)
+        {
+            _reasons.Add(CompanyCheckReason.NotCompanyPagesIndicationFound.ToString());
+        }
     }
 
-    //TODO check what kind of phrases to check and what the negative score should be
-    private void CheckIfParkedOrPlaceHolder(string text)
+    private bool CheckIfParkedOrPlaceHolder(string text)
     {
         if (text.Contains("This domain is for sale", StringComparison.InvariantCultureIgnoreCase) ||
             text.Contains("Buy this domain", StringComparison.InvariantCultureIgnoreCase) ||
@@ -284,9 +308,10 @@ public class CompanyChecker : ICompanyChecker
             )
         {
             Log.Information("Placeholder or parking indicator found");
-            _score -= 10;
-            _reasons.Add(CompanyCheckReason.ParkingIndicator.ToString());
+            _score -= 20;
+            _reasons.Add(CompanyCheckReason.ParkingIndicatorFound.ToString());
+            return true;
         }
-        //TODO probably for parking/placeholder sites can just stop checking the rest?
+        return false;
     }
 }
