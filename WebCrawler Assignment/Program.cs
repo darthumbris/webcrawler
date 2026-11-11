@@ -37,7 +37,28 @@ app.MapPost("/crawl", async (
 
     var result = await crawler.CrawlAsync(
         request.DomainName,
-        cancellationToken);
+        cancellationToken, false);
+
+    return Results.Ok(result);
+});
+
+app.MapPost("/crawlCompany", async (
+    CrawlRequest request,
+    ICrawlService crawler,
+    CancellationToken cancellationToken) =>
+{
+    //This endpoint result should be used then by the LLM to determine if the website is
+    //a company or not
+    //if it is it can go to the /crawl endpoint to get all the pages?
+    Log.Information("Crawl endpoint trying domain: {Url} to better determine if it is a company", request.DomainName);
+    if (string.IsNullOrWhiteSpace(request.DomainName))
+        return Results.BadRequest("domainName is required.");
+
+    //This crawl should only crawl the priority pages or a limited set of pages?
+    var result = await crawler.CrawlAsync(
+        request.DomainName,
+        cancellationToken,
+        true);
 
     return Results.Ok(result);
 });
@@ -56,20 +77,9 @@ app.Run();
 
 //curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\" }" https://localhost:7299/crawl
 
-
-//TODO 1. company check doen , welke pagina's loaden om te checken of het een bedrijf is. (Dus de prioriy check, zal dan waarschijnlijk niet via sitemap gaan
-// of sitemaps filteren eruit op bepaalde keywords) Prioriy misschien via keywords te checken en die alleen als request toevoegen.
-// en als duidelijk is dat het geen company is moeten alle overige requests gecancelled worden?
-// of is de company check pas op het einde als alle pagina's gescraped zijn?
-
 //TODO misschien ook beter de too many requests handlen (base url al?)
 //TODO voor crawlservice waarschijnlijk een priority systeem
 //waarbij bijvoorbeeld dingen als about page etc als eerst worden gecrawled?
-
-//misschien de crawler een sessie openen met de programma die de checks uitvoert
-//en dan aan de hand van de result verder of stoppen met crawlen.
-
-
 
 //Rest command om sessie te openen en sluiten
 //krijgt een ID
@@ -85,3 +95,9 @@ app.Run();
 // 2. crawl misschien bepaalde pagina's
 // 3. LLM check of company is
 // 4. Crawl de rest van de site
+
+
+//TODO Voor selenium grid kijk ook naar de Distributed Mode
+//hier je een router, distributor en nodes die daarmee connecten die allemaal
+//op verschillende machines draaien
+//op die manier kan je veel meer parallel alles checken

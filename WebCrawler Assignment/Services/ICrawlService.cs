@@ -5,6 +5,7 @@ namespace WebCrawler.Services;
 public interface ICrawlService
 {
     Task<CrawlResult> CrawlAsync(
-string domainName,
-CancellationToken cancellationToken);
+        string domainName,
+        CancellationToken cancellationToken,
+        bool limitedCompanyCrawling);
 }

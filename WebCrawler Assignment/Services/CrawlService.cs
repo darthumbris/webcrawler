@@ -32,6 +32,7 @@ public sealed class CrawlService : ICrawlService
     private readonly SiteMapService _siteMapService;
 
     private Uri? _baseUri;
+    bool _limitedCompanyCrawling = true;
 
     public CrawlService()
     {
@@ -43,8 +44,9 @@ public sealed class CrawlService : ICrawlService
         _siteMapService = new SiteMapService(_httpClient);
     }
 
-    public async Task<CrawlResult> CrawlAsync(string url, CancellationToken cancellationToken)
+    public async Task<CrawlResult> CrawlAsync(string url, CancellationToken cancellationToken, bool limitedCompanyCrawling)
     {
+        _limitedCompanyCrawling = limitedCompanyCrawling;
         if (!(url.StartsWith("http://") || url.StartsWith("https://")))
         {
             url = "https://" + url;
@@ -60,15 +62,29 @@ public sealed class CrawlService : ICrawlService
 
         var sitemapUrls = 0;
 
-        //TODO might be better to first sort the siteMapLinks
-        //using a priority check
-        //and then add the sorted links
+        HashSet<Uri> siteMapLinks = new();
+
         foreach (var sitemap in sitemapFiles)
         {
             foreach (var siteMapUrl in sitemap.Links)
             {
+                siteMapLinks.Add(siteMapUrl);
                 sitemapUrls++;
-                AddRequest(siteMapUrl);
+            }
+        }
+        if (_limitedCompanyCrawling)
+        {
+            var sortedFilterdLinks = CompanyPriorityFilter.FilterAndSortLinks(siteMapLinks);
+            foreach (var link in sortedFilterdLinks)
+            {
+                AddRequest(link);
+            }
+        }
+        else
+        {
+            foreach (var link in siteMapLinks)
+            {
+                AddRequest(link);
             }
         }
         Log.Information("Added {Count} sitemap urls to request queue for domain: {Url}", sitemapUrls, url);
@@ -212,10 +228,16 @@ public sealed class CrawlService : ICrawlService
 
                 if (!robotHeader.NoFollow(_crawlSettings.UserAgent))
                 {
-                    //TODO might be better to first sort the internalLinks
-                    //using a priority check
-                    //and then add the sorted links
-                    foreach (var link in content.InternalLinks)
+                    IEnumerable<string> links;
+                    if (!_limitedCompanyCrawling)
+                    {
+                        links = content.InternalLinks;
+                    }
+                    else
+                    {
+                        links = CompanyPriorityFilter.FilterAndSortLinks(content.InternalLinks);
+                    }
+                    foreach (var link in links)
                     {
                         AddLink(link);
                     }
