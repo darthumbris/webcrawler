@@ -1,5 +1,7 @@
 ﻿namespace WebCrawler.Models;
 
 public sealed record CrawlRequest(
-    string DomainName
+    string DomainName,
+    bool CompanyCheck,
+    bool? UseSitemaps
 );

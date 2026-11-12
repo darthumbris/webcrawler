@@ -52,6 +52,7 @@ public sealed class CrawlService : ICrawlService
 
     private async Task LoadSiteMaps(string url, CancellationToken cancellationToken)
     {
+        Log.Information("loading Sitemaps from robots.txt file");
         var sitemapFiles = await _siteMapService.FetchSiteMapsAsync(url, _robotsService.SiteMaps, cancellationToken);
         Log.Information("Found {Count} sitemap files for domain: {Url}", sitemapFiles.Count(), url);
 
@@ -86,7 +87,7 @@ public sealed class CrawlService : ICrawlService
         Log.Information("Added {Count} sitemap urls of total {Total} found to request queue for domain: {Url}", sitemapUrls, mapLinks.Count, url);
     }
 
-    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, CancellationToken cancellationToken)
+    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, bool useSitemaps, CancellationToken cancellationToken)
     {
         _limitedCompanyCrawling = limitedCompanyCrawling;
         if (!(url.StartsWith("http://") || url.StartsWith("https://")))
@@ -95,13 +96,22 @@ public sealed class CrawlService : ICrawlService
         }
 
         _baseUri = new Uri(url);
-        Log.Information("Starting crawl for domain: {Url}", url);
+        if (limitedCompanyCrawling)
+        {
+            Log.Information("Starting crawl for domain: {Url} using filtering", url);
+        }
+        else
+        {
+            Log.Information("Starting crawl for domain: {Url}", url);
+        }
         await LoadRobot(url, cancellationToken);
 
         AddRequest(_baseUri);
 
-        //TODO maybe the loading of the sitemaps and adding the links as requests needs to be optional?
-        await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
+        if (useSitemaps)
+        {
+            await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
+        }
 
         StartPageHandler();
 

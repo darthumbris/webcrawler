@@ -35,30 +35,15 @@ app.MapPost("/crawl", async (
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
+    //the CompanyCheck is so that the crawler only crawls pages using a filter
+    //These crawled pages can then be used by the next check to
+    //see if the url is a company
+    //if it is it can then do the /crawl with the CompanyCheck = false
+    //this way the crawler will crawl all pages
     var result = await crawler.CrawlAsync(
         request.DomainName,
-        false,
-        cancellationToken);
-
-    return Results.Ok(result);
-});
-
-app.MapPost("/crawlCompany", async (
-    CrawlRequest request,
-    ICrawlService crawler,
-    CancellationToken cancellationToken) =>
-{
-    //This endpoint result should be used then by the LLM to determine if the website is
-    //a company or not
-    //if it is it can go to the /crawl endpoint to get all the pages?
-    Log.Information("Crawl endpoint trying domain: {Url} to better determine if it is a company", request.DomainName);
-    if (string.IsNullOrWhiteSpace(request.DomainName))
-        return Results.BadRequest("domainName is required.");
-
-    //This crawl should only crawl the priority pages or a limited set of pages?
-    var result = await crawler.CrawlAsync(
-        request.DomainName,
-        true,
+        request.CompanyCheck,
+        request.UseSitemaps ?? false,
         cancellationToken);
 
     return Results.Ok(result);
@@ -76,7 +61,8 @@ app.MapGet("/health", () =>
 
 app.Run();
 
-//curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\" }" https://localhost:7299/crawl
+//curl command: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"CompanyCheck\": false, \"UseSitemaps\": false }" https://localhost:7299/crawl
+//curl command companyCheck: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"CompanyCheck\": true, \"UseSitemaps\": false }" https://localhost:7299/crawl
 
 //TODO misschien ook beter de too many requests handlen (base url al?)
 //TODO voor crawlservice waarschijnlijk een priority systeem
