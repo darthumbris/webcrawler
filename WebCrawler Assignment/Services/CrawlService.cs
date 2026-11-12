@@ -24,7 +24,7 @@ public sealed class CrawlService : ICrawlService
 
     private readonly Stopwatch _stopwatch = new();
 
-    private readonly SeleniumPageHandler _pageHandler;
+    private SeleniumPageHandler? _pageHandler;
 
     private readonly HtmlExtractor _htmlExtractor = new();
 
@@ -38,12 +38,16 @@ public sealed class CrawlService : ICrawlService
 
     public CrawlService()
     {
+        _siteMapService = new SiteMapService(_httpClient);
+    }
+
+    private void StartPageHandler()
+    {
         //For Local testing don't use the hubUrl
         string hubUrl = "http://localhost:4444/wd/hub";
         _pageHandler = new SeleniumPageHandler(BrowserType.Firefox, hubUrl);
         Log.Information("Done creating webdrivers");
         //_pageHandler = new SeleniumPageHandler(BrowserType.Firefox);
-        _siteMapService = new SiteMapService(_httpClient);
     }
 
     public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, CancellationToken cancellationToken)
@@ -64,32 +68,35 @@ public sealed class CrawlService : ICrawlService
 
         var sitemapUrls = 0;
 
-        HashSet<Uri> siteMapLinks = new();
+        HashSet<Uri> siteMapLinks = [];
 
         foreach (var sitemap in sitemapFiles)
         {
             foreach (var siteMapUrl in sitemap.Links)
             {
                 siteMapLinks.Add(siteMapUrl);
-                sitemapUrls++;
             }
         }
+        List<Uri> mapLinks;
         if (_limitedCompanyCrawling)
         {
-            var sortedFilterdLinks = CompanyPriorityFilter.FilterAndSortLinks(siteMapLinks);
-            foreach (var link in sortedFilterdLinks)
-            {
-                AddRequest(link);
-            }
+            mapLinks = CompanyPriorityFilter.FilterAndSortLinks(siteMapLinks);
         }
         else
         {
-            foreach (var link in siteMapLinks)
+            mapLinks = siteMapLinks.ToList();
+        }
+        foreach (var link in mapLinks)
+        {
+            if (AddRequest(link))
             {
-                AddRequest(link);
+                sitemapUrls++;
             }
         }
-        Log.Information("Added {Count} sitemap urls to request queue for domain: {Url}", sitemapUrls, url);
+
+        Log.Information("Added {Count} sitemap urls of total {Total} found to request queue for domain: {Url}", sitemapUrls, mapLinks.Count, url);
+
+        StartPageHandler();
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
@@ -111,9 +118,9 @@ public sealed class CrawlService : ICrawlService
 
         _stopwatch.Stop();
 
-        Log.Information("Crawl completed for domain: {Url} in {Time} seconds with {Count} pages fetched, visited urls {Urls} {CountVisited}", url, _stopwatch.Elapsed.TotalSeconds, _fetchedPages.Count, string.Join(", ", _visited.Keys), _visited.Count);
+        Log.Information("Crawl completed for domain: {Url} in {Time} seconds with {Count} pages fetched", url, _stopwatch.Elapsed.TotalSeconds, _fetchedPages.Count);
 
-        _pageHandler.Quit();
+        _pageHandler!.Quit();
 
         foreach (var extractedPage in resultCrawl)
         {
@@ -177,14 +184,14 @@ public sealed class CrawlService : ICrawlService
         return url.Host == _baseUri!.Host || url.Host.TrimStart("www.").ToString() == _baseUri!.Host.TrimStart("www.").ToString() || _baseUri!.Host.TrimStart("www2.").ToString() == url.Host.TrimStart("www2.").ToString();
     }
 
-    public void AddRequest(Uri url)
+    public bool AddRequest(Uri url)
     {
         url = StripFragmentUri(url);
 
         if (!IsSameAsBaseHost(url))
         {
             Log.Information("Request for host {UrlHost} is not the same as base host {BaseUrlHost} skipping request to url {Url}", url.Host, _baseUri!.Host, url);
-            return;
+            return false;
         }
 
         if (_crawlSettings.MaxPages > 0)
@@ -192,7 +199,7 @@ public sealed class CrawlService : ICrawlService
             if (_fetchedPages.Count + _requestProcessor.PendingRequests == _crawlSettings.MaxPages)
             {
                 Log.Information("Crawl limit reached {Url} will be ignored", url);
-                return;
+                return false;
             }
         }
 
@@ -202,6 +209,7 @@ public sealed class CrawlService : ICrawlService
         {
             Log.Information("Added {Url} to request queue", url);
             _requestProcessor.AddRequest(url);
+            return true;
         }
         else if (notYetVisited)
         {
@@ -211,6 +219,7 @@ public sealed class CrawlService : ICrawlService
         {
             Log.Warning("Request for {Url} was already handled. Will not add again.", url);
         }
+        return false;
     }
 
     public void AddResult(ExtractedPage page)
@@ -286,7 +295,7 @@ public sealed class CrawlService : ICrawlService
                     await responseHandler(processResult, crawlState);
                 }
             },
-            _pageHandler,
+            _pageHandler!,
             cancellation
             );
         Log.Information("Completed crawling {Count} pages", _fetchedPages.Count);
