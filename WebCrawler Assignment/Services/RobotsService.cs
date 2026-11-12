@@ -230,7 +230,7 @@ public sealed class RobotsService
                     }
                     if (line.Type == LineType.Rule)
                     {
-                        var rule = new AccessRule(userAgents, line, order++);
+                        var rule = new AccessRule([.. userAgents], line, order++);
                         if (rule.IsGlobal())
                         {
                             _globalRules.Add(rule);
@@ -246,8 +246,7 @@ public sealed class RobotsService
                     }
                     else
                     {
-                        Log.Information("Adding crawl delay rule for user agent {Text} with delay {Count}", userAgents.Last(), line.Value);
-                        _crawlDelayRules.Add(new CrawlDelayRule(userAgents, line.Value!, order++));
+                        _crawlDelayRules.Add(new CrawlDelayRule([.. userAgents], line.Value!, order++));
                     }
                     HasRobotRules = true;
                     break;
@@ -338,7 +337,7 @@ public sealed class RobotsService
         url = FixUrl(url);
 
         var specificMatches = _specificRules
-            .Where(x => x.UserAgents.Any(ua => userAgent.Contains(ua, StringComparison.InvariantCultureIgnoreCase)))
+            .Where(x => x.UserAgents.Any(ua => userAgent.Equals(ua, StringComparison.InvariantCultureIgnoreCase)))
             .ToList();
         //use speccific rules if they exist, otherwise use global rules
         var relevantRules = specificMatches.Count > 0
@@ -437,7 +436,7 @@ public sealed class RobotsService
             .ToList();
 
         var specificDelays = _crawlDelayRules
-            .Where(x => x.UserAgents.Any(ua => userAgent.Contains(ua, StringComparison.InvariantCultureIgnoreCase)))
+            .Where(x => x.UserAgents.Any(ua => userAgent.Equals(ua, StringComparison.InvariantCultureIgnoreCase)))
             .ToList();
 
         if (globalDelays.Count == 0 && specificDelays.Count == 0)
