@@ -1,6 +1,5 @@
 ﻿namespace WebCrawler.Models;
 
-//TODO what reasons to add and how to word properly?
 public enum CompanyCheckReason
 {
     RobotRefusal,

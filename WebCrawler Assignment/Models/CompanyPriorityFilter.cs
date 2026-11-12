@@ -6,8 +6,6 @@ namespace WebCrawler.Models;
 //and filter out links for checking if a website is a company
 public class CompanyPriorityFilter
 {
-    //TODO is there a need to filter out only the ones with score > 0?
-
     public static List<Uri> FilterAndSortLinks(IEnumerable<Uri> internalLinks)
     {
         Dictionary<Uri, int> links = [];
@@ -44,7 +42,7 @@ public class CompanyPriorityFilter
         return selectedLinks;
     }
 
-    //TODO figure out how to score the pages
+    //TODO figure out how to score the pages and also maybe have negative score?
     private static int LinkScore(string url)
     {
         if (url.Contains("about", StringComparison.InvariantCultureIgnoreCase) ||
