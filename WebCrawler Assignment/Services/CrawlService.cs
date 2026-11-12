@@ -50,19 +50,8 @@ public sealed class CrawlService : ICrawlService
         //_pageHandler = new SeleniumPageHandler(BrowserType.Firefox);
     }
 
-    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, CancellationToken cancellationToken)
+    private async Task LoadSiteMaps(string url, CancellationToken cancellationToken)
     {
-        _limitedCompanyCrawling = limitedCompanyCrawling;
-        if (!(url.StartsWith("http://") || url.StartsWith("https://")))
-        {
-            url = "https://" + url;
-        }
-
-        _baseUri = new Uri(url);
-        Log.Information("Starting crawl for domain: {Url}", url);
-        await LoadRobot(url, cancellationToken);
-
-        AddRequest(_baseUri);
         var sitemapFiles = await _siteMapService.FetchSiteMapsAsync(url, _robotsService.SiteMaps, cancellationToken);
         Log.Information("Found {Count} sitemap files for domain: {Url}", sitemapFiles.Count(), url);
 
@@ -95,13 +84,31 @@ public sealed class CrawlService : ICrawlService
         }
 
         Log.Information("Added {Count} sitemap urls of total {Total} found to request queue for domain: {Url}", sitemapUrls, mapLinks.Count, url);
+    }
+
+    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, CancellationToken cancellationToken)
+    {
+        _limitedCompanyCrawling = limitedCompanyCrawling;
+        if (!(url.StartsWith("http://") || url.StartsWith("https://")))
+        {
+            url = "https://" + url;
+        }
+
+        _baseUri = new Uri(url);
+        Log.Information("Starting crawl for domain: {Url}", url);
+        await LoadRobot(url, cancellationToken);
+
+        AddRequest(_baseUri);
+
+        //TODO maybe the loading of the sitemaps and adding the links as requests needs to be optional?
+        await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
 
         StartPageHandler();
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
 
-        Log.Information("Crawl delay set to: {Delay} seconds", delay.TotalSeconds);
+        Log.Information("Crawl delay set to: {Delay}ms", delay.TotalMilliseconds);
 
         var resultCrawl = await ProcessAsync(async (requestResult, crawlState) =>
         {
@@ -114,7 +121,7 @@ public sealed class CrawlService : ICrawlService
             {
                 Log.Warning("Request for {Url} returned no content", crawlState.Location);
             }
-        }, cancellationToken);
+        }, delay, cancellationToken);
 
         _stopwatch.Stop();
 
@@ -261,7 +268,7 @@ public sealed class CrawlService : ICrawlService
         }
     }
 
-    public async Task<IEnumerable<ExtractedPage>> ProcessAsync(Func<ProcessResult, CrawlUrlState, Task> responseHandler, CancellationToken cancellation = default)
+    public async Task<IEnumerable<ExtractedPage>> ProcessAsync(Func<ProcessResult, CrawlUrlState, Task> responseHandler, TimeSpan delay, CancellationToken cancellation = default)
     {
         await _requestProcessor.ProcessAsync(
             async (processResult) =>
@@ -296,6 +303,7 @@ public sealed class CrawlService : ICrawlService
                 }
             },
             _pageHandler!,
+            delay,
             cancellation
             );
         Log.Information("Completed crawling {Count} pages", _fetchedPages.Count);

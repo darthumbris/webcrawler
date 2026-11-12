@@ -95,7 +95,7 @@ namespace WebCrawler.Services
             }
         }
 
-        public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageHandler pageHandler, CancellationToken cancellationToken = default)
+        public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageHandler pageHandler, TimeSpan delay, CancellationToken cancellationToken = default)
         {
             var active = new ConcurrentDictionary<Task<ProcessResult>, ProcessInfo>(_requestOptions.MaxSimultanousRequests, _requestOptions.MaxSimultanousRequests);
             var availableDrivers = new Queue<int>();
@@ -120,7 +120,7 @@ namespace WebCrawler.Services
 
                         if (_requestOptions.RequestDelay.TotalMilliseconds > 0)
                         {
-                            requestDelay = _requestOptions.RequestDelay.TotalMilliseconds;
+                            requestDelay = _requestOptions.RequestDelay.TotalMilliseconds + delay.TotalMilliseconds;
                             requestDelay += randomOffset.NextDouble() * _requestOptions.RequestDelayOffset.TotalMilliseconds;
                         }
 
