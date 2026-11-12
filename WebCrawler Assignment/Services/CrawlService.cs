@@ -15,6 +15,8 @@ public sealed class CrawlService : ICrawlService
 
     private readonly List<string> _collectedHtml = [];
     private readonly List<string> _collectedText = [];
+    private readonly List<string> _collectedCss = [];
+    private readonly List<string> _collectedJavascript = [];
     private readonly List<string> _collectedInternalLinks = [];
     private readonly List<string> _collectedExternalLinks = [];
 
@@ -44,7 +46,7 @@ public sealed class CrawlService : ICrawlService
         _siteMapService = new SiteMapService(_httpClient);
     }
 
-    public async Task<CrawlResult> CrawlAsync(string url, CancellationToken cancellationToken, bool limitedCompanyCrawling)
+    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, CancellationToken cancellationToken)
     {
         _limitedCompanyCrawling = limitedCompanyCrawling;
         if (!(url.StartsWith("http://") || url.StartsWith("https://")))
@@ -98,7 +100,7 @@ public sealed class CrawlService : ICrawlService
         {
             if (!string.IsNullOrEmpty(requestResult.HtmlContent))
             {
-                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult.HtmlContent, requestResult.TextContent ?? string.Empty);
+                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult);
                 AddResult(crawlState.Location, parsedContent);
             }
             else
@@ -117,6 +119,8 @@ public sealed class CrawlService : ICrawlService
         {
             _collectedHtml.Add(extractedPage.HtmlContent);
             _collectedText.Add(extractedPage.Text);
+            _collectedCss.Add(extractedPage.CssContent);
+            _collectedJavascript.Add(extractedPage.JavascriptContent);
             _collectedInternalLinks.AddRange(extractedPage.InternalLinks);
             _collectedExternalLinks.AddRange(extractedPage.ExternalLinks);
         }
@@ -125,6 +129,8 @@ public sealed class CrawlService : ICrawlService
         (
             _collectedHtml,
             _collectedText,
+            _collectedCss,
+            _collectedJavascript,
             _collectedInternalLinks,
             _collectedExternalLinks
         );

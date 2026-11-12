@@ -6,6 +6,6 @@ public interface ICrawlService
 {
     Task<CrawlResult> CrawlAsync(
         string domainName,
-        CancellationToken cancellationToken,
-        bool limitedCompanyCrawling);
+        bool limitedCompanyCrawling,
+        CancellationToken cancellationToken);
 }

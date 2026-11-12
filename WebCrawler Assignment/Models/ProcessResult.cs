@@ -10,6 +10,8 @@ namespace WebCrawler.Models
         //stream is better instead of the whole string
         public string? HtmlContent { get; set; }
         public string? TextContent { get; set; }
+        public string? JavascriptContent { get; set; }
+        public string? CssContent { get; set; }
         public TimeSpan ElapsedTime { get; set; }
         public Exception? Exception { get; set; }
     }

@@ -3,6 +3,8 @@
 public sealed record CrawlResult(
     List<string> Html,
     List<string> Text,
+    List<string> Css,
+    List<string> Javascript,
     List<string> InternalLinks,
     List<string> ExternalLinks
 );

@@ -11,9 +11,15 @@ namespace WebCrawler.Services
     {
         private ConcurrentQueue<Uri> RequestQueue { get; } = new();
         private readonly RequestOptions _requestOptions = new();
+        private readonly string cssGetterScript;
+        private readonly string javascriptGetterScript;
         public int PendingRequests = 0;
 
-        public RequestProcessor() { }
+        public RequestProcessor()
+        {
+            cssGetterScript = File.ReadAllText("./Scripts/get_all_css.js");
+            javascriptGetterScript = File.ReadAllText("./Scripts/get_all_javascript.js");
+        }
 
         public void AddRequest(Uri uri)
         {
@@ -39,11 +45,9 @@ namespace WebCrawler.Services
 
                 var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), info.DriverIndex, cancel);
 
-                //TODO add the css and javascript loader scripts and add to the html content stuff
-
-                //this javascript will get all the text from the page, should probably add that in the processResult as well, that way the html extractor doesn't need to handle that.
-                //var extractedText = await pageHandler.ExecuteJavascriptAsync("var callback = arguments[arguments.length - 1];var check = () => {callback(document.body.innerText);};check();", cancel);
                 var extractedText = await pageHandler.ExecuteJavascript("return document.body.innerText;", info.DriverIndex, cancel);
+                var extractedCss = await pageHandler.ExecuteJavascript(cssGetterScript, info.DriverIndex, cancel);
+                var extractedJavascript = await pageHandler.ExecuteJavascript(javascriptGetterScript, info.DriverIndex, cancel);
 
                 info.Timer.Stop();
 
@@ -58,7 +62,9 @@ namespace WebCrawler.Services
                     Delay = info.Delay,
                     HtmlContent = fetchedHtml,
                     ElapsedTime = info.Timer.Elapsed,
-                    TextContent = extractedText
+                    TextContent = extractedText,
+                    CssContent = extractedCss,
+                    JavascriptContent = extractedJavascript
                 };
             }
             catch (OperationCanceledException) when (info.Cancellation.IsCancellationRequested)

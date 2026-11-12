@@ -1,17 +1,21 @@
 ﻿using HtmlAgilityPack;
+using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
 public class HtmlExtractor : IHTMLExtractor
 {
-    public async Task<ExtractedPage> Extract(Uri baseUri, string html, string textContent)
+    public async Task<ExtractedPage> Extract(Uri baseUri, ProcessResult requestResult)
     {
-        if (string.IsNullOrEmpty(html))
+        var textContent = requestResult.TextContent ?? string.Empty;
+        var cssContent = requestResult.CssContent ?? string.Empty;
+        var jsContent = requestResult.JavascriptContent ?? string.Empty;
+        if (string.IsNullOrEmpty(requestResult.HtmlContent))
         {
-            return new ExtractedPage(string.Empty, textContent, [], []);
+            return new ExtractedPage(string.Empty, textContent, cssContent, jsContent, [], []);
         }
         var doc = new HtmlDocument();
-        doc.LoadHtml(html);
+        doc.LoadHtml(requestResult.HtmlContent);
 
         var links = doc.DocumentNode.SelectNodes("//a[@href]");
         var internalLinks = new HashSet<string>();
@@ -43,7 +47,7 @@ public class HtmlExtractor : IHTMLExtractor
             }
         }
 
-        return new ExtractedPage(html, textContent, internalLinks, externalLinks);
+        return new ExtractedPage(requestResult.HtmlContent, textContent, cssContent, jsContent, internalLinks, externalLinks);
     }
 
     public IReadOnlyCollection<string> ExtractInternalLinks(Uri baseUri, HtmlDocument doc)
