@@ -5,11 +5,6 @@ using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
-public sealed record FetchedPage(
-    string Url,
-    string Html,
-    string? Title);
-
 public sealed record FetchedSiteMap
 (
     IReadOnlyCollection<Uri> Links,
@@ -90,7 +85,7 @@ public sealed class SeleniumPageHandler
 
     public void Quit()
     {
-        Log.Information("Closing Selenium WebDriver instance");
+        Log.Information("Closing Selenium WebDriver instances");
         foreach (var driver in _drivers)
         {
             driver.Quit();

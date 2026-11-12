@@ -37,7 +37,8 @@ app.MapPost("/crawl", async (
 
     var result = await crawler.CrawlAsync(
         request.DomainName,
-        cancellationToken, false);
+        false,
+        cancellationToken);
 
     return Results.Ok(result);
 });
@@ -57,8 +58,8 @@ app.MapPost("/crawlCompany", async (
     //This crawl should only crawl the priority pages or a limited set of pages?
     var result = await crawler.CrawlAsync(
         request.DomainName,
-        cancellationToken,
-        true);
+        true,
+        cancellationToken);
 
     return Results.Ok(result);
 });

@@ -5,7 +5,6 @@ using System.Net;
 
 public sealed class SiteMapService
 {
-
     private readonly HttpClient _httpClient;
     private static readonly SiteMapParser _siteMapParser = new();
 
