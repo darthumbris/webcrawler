@@ -25,7 +25,7 @@ namespace WebCrawler.Models
             return result;
         }
 
-        private void ExtractEntities(JsonElement el, List<StructuredCompanyData> result)
+        private static void ExtractEntities(JsonElement el, List<StructuredCompanyData> result)
         {
             if (el.ValueKind == JsonValueKind.Array)
             {
