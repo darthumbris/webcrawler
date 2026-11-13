@@ -155,8 +155,6 @@ public sealed class CrawlService : ICrawlService
             _collectedExternalLinks.AddRange(extractedPage.ExternalLinks);
         }
 
-        Log.Information("Crawl of {Url} contained html of len {Length}", url, crawledHtmlTotalLen);
-
         var result = new CrawlResult
         (
             _collectedHtml,
@@ -300,13 +298,20 @@ public sealed class CrawlService : ICrawlService
                 //retry the request if failed
                 if (processResult.Exception != null)
                 {
-                    Log.Information("Request for {Url} got an exception. Will retry later.", processResult.Location);
-                    crawlState.Requests.Add(new Request
+                    if (crawlState.Requests.Count <= _crawlSettings.MaxRequestRetries)
                     {
-                        StartTime = processResult.StartTime,
-                        ElapsedTime = processResult.ElapsedTime,
-                    });
-                    AddRequest(processResult.Location);
+                        Log.Information("Request for {Url} got an exception. Will retry later.", processResult.Location);
+                        crawlState.Requests.Add(new Request
+                        {
+                            StartTime = processResult.StartTime,
+                            ElapsedTime = processResult.ElapsedTime,
+                        });
+                        AddRequest(processResult.Location);
+                    }
+                    else
+                    {
+                        Log.Information("Request for {Url} got an exception. Retry limit {Limit} reached.", processResult.Location, _crawlSettings.MaxRequestRetries);
+                    }
                 }
                 else
                 {
