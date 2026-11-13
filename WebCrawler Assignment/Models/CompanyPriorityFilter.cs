@@ -42,7 +42,6 @@ public class CompanyPriorityFilter
         return selectedLinks;
     }
 
-    //TODO figure out how to score the pages and also maybe have negative score?
     private static int LinkScore(string url)
     {
         if (url.Contains("about", StringComparison.InvariantCultureIgnoreCase) ||
@@ -68,6 +67,12 @@ public class CompanyPriorityFilter
             url.Contains("cart", StringComparison.InvariantCultureIgnoreCase))
         {
             return 3;
+        }
+        if (url.Contains("resume", StringComparison.InvariantCultureIgnoreCase) ||
+            url.Contains("cv", StringComparison.InvariantCultureIgnoreCase) ||
+            url.Contains("blog", StringComparison.InvariantCultureIgnoreCase))
+        {
+            return -1;
         }
         return 0;
     }
