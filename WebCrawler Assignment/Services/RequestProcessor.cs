@@ -95,7 +95,21 @@ namespace WebCrawler.Services
             }
         }
 
-        public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageHandler pageHandler, TimeSpan delay, CancellationToken cancellationToken = default)
+        private double Delay(TimeSpan crawlDelay, Random randomOffset)
+        {
+            var requestDelay = crawlDelay.TotalMilliseconds;
+            var requestOptionDelay = _requestOptions.RequestDelay.TotalMilliseconds;
+
+            //Only add the extra delay if it is bigger then the CrawlDelay
+            if (requestOptionDelay > 0 && requestOptionDelay > requestDelay)
+            {
+                requestDelay += requestOptionDelay;
+            }
+            requestDelay += randomOffset.NextDouble() * _requestOptions.RequestDelayOffset.TotalMilliseconds;
+            return requestDelay;
+        }
+
+        public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageHandler pageHandler, TimeSpan crawlDelay, CancellationToken cancellationToken)
         {
             var active = new ConcurrentDictionary<Task<ProcessResult>, ProcessInfo>(_requestOptions.MaxSimultanousRequests, _requestOptions.MaxSimultanousRequests);
             var availableDrivers = new Queue<int>();
@@ -116,23 +130,14 @@ namespace WebCrawler.Services
                     cancellationToken.ThrowIfCancellationRequested();
                     if (RequestQueue.TryDequeue(out var url))
                     {
-                        Double requestDelay = 0;
-
-                        if (_requestOptions.RequestDelay.TotalMilliseconds > 0)
-                        {
-                            requestDelay = _requestOptions.RequestDelay.TotalMilliseconds + delay.TotalMilliseconds;
-                            requestDelay += randomOffset.NextDouble() * _requestOptions.RequestDelayOffset.TotalMilliseconds;
-                        }
-
-                        var driverIndex = availableDrivers.Dequeue();
-
+                        var requestDelay = Delay(crawlDelay, randomOffset);
                         var processInfo = new ProcessInfo
                         {
                             Location = url,
                             Timer = new Stopwatch(),
                             Delay = requestDelay,
                             Cancellation = cancellationToken,
-                            DriverIndex = driverIndex,
+                            DriverIndex = availableDrivers.Dequeue(),
                         };
 
                         Log.Information("Request for {Url} starts with a delay of {Time}ms", url, requestDelay);
