@@ -32,6 +32,7 @@ public sealed class CrawlService : ICrawlService
 
     private readonly RequestProcessor _requestProcessor = new();
     private readonly SiteMapService _siteMapService;
+    private int _maxPages = 0;
 
     private Uri? _baseUri;
     bool _limitedCompanyCrawling = true;
@@ -99,10 +100,12 @@ public sealed class CrawlService : ICrawlService
         if (limitedCompanyCrawling)
         {
             Log.Information("Starting crawl for domain: {Url} using filtering", url);
+            _maxPages = _crawlSettings.MaxPagesCompanyCheck;
         }
         else
         {
             Log.Information("Starting crawl for domain: {Url}", url);
+            _maxPages = _crawlSettings.MaxPages;
         }
         await LoadRobot(url, cancellationToken);
 
@@ -139,8 +142,11 @@ public sealed class CrawlService : ICrawlService
 
         _pageHandler!.Quit();
 
+        long crawledHtmlTotalLen = 0;
+
         foreach (var extractedPage in resultCrawl)
         {
+            crawledHtmlTotalLen += extractedPage.HtmlContent.Length;
             _collectedHtml.Add(extractedPage.HtmlContent);
             _collectedText.Add(extractedPage.Text);
             _collectedCss.Add(extractedPage.CssContent);
@@ -148,6 +154,8 @@ public sealed class CrawlService : ICrawlService
             _collectedInternalLinks.AddRange(extractedPage.InternalLinks);
             _collectedExternalLinks.AddRange(extractedPage.ExternalLinks);
         }
+
+        Log.Information("Crawl of {Url} contained html of len {Length}", url, crawledHtmlTotalLen);
 
         var result = new CrawlResult
         (
@@ -211,9 +219,9 @@ public sealed class CrawlService : ICrawlService
             return false;
         }
 
-        if (_crawlSettings.MaxPages > 0)
+        if (_maxPages > 0)
         {
-            if (_fetchedPages.Count + _requestProcessor.PendingRequests == _crawlSettings.MaxPages)
+            if (_fetchedPages.Count + _requestProcessor.PendingRequests >= _maxPages)
             {
                 Log.Information("Crawl limit reached {Url} will be ignored", url);
                 return false;
