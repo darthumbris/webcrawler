@@ -65,8 +65,6 @@ app.Run();
 //curl command companyCheck: curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"CompanyCheck\": true, \"UseSitemaps\": false }" https://localhost:7299/crawl
 
 //TODO misschien ook beter de too many requests handlen (base url al?)
-//TODO voor crawlservice waarschijnlijk een priority systeem
-//waarbij bijvoorbeeld dingen als about page etc als eerst worden gecrawled?
 
 //Rest command om sessie te openen en sluiten
 //krijgt een ID
