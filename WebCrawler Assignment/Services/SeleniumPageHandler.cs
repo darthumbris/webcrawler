@@ -85,19 +85,14 @@ public sealed class SeleniumPageHandler
         cancellationToken.ThrowIfCancellationRequested();
         var driver = _drivers[driverIndex];
         driver.Navigate().GoToUrl(url);
-
-
         await ScrollPage(driverIndex, cancellationToken);
 
-
+        //really simple check for 429 Too many Requests
+        //because Selenium doesn't give response codes for some stupid reason....
         if (driver.PageSource.Contains("<h1>Too Many Requests</h1>"))
         {
-            Log.Warning("Too many requests found");
+            throw new Exception("Too many request response detected");
         }
-
-        //TODO now only problem is with stuff like 429 too many requests can't be detected with selenium
-        //but if checked using the httpclient it might not happen (because they use botdetection)
-        //don't know how or if to handle that part?
 
         return driver.PageSource;
     }
