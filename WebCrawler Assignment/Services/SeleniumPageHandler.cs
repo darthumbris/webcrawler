@@ -55,6 +55,28 @@ public sealed class SeleniumPageHandler
     private readonly RequestOptions _requestOptions = new();
     private readonly List<IJavaScriptExecutor> _executors = [];
 
+    private async Task ScrollPage(int driverIndex,
+        CancellationToken cancellationToken)
+    {
+        var executor = _executors[driverIndex];
+        var scrollsPerformed = 0;
+        var lastHeight = executor.ExecuteScript("return document.body.scrollHeight");
+
+        while (scrollsPerformed < _requestOptions.MaxScrolls)
+        {
+            executor.ExecuteScript("window.scrollTo(0, document.body.scrollHeight);");
+            await Task.Delay(_requestOptions.ScrollDelay, cancellationToken);
+
+            var newHeight = executor.ExecuteScript("return document.body.scrollHeight");
+            if (newHeight != null && newHeight.Equals(lastHeight))
+            {
+                break;
+            }
+            lastHeight = newHeight;
+            scrollsPerformed += 1;
+        }
+    }
+
     public async Task<string> FetchPageAsync(
         string url,
         int driverIndex,
@@ -64,10 +86,15 @@ public sealed class SeleniumPageHandler
         var driver = _drivers[driverIndex];
         driver.Navigate().GoToUrl(url);
 
+
+        await ScrollPage(driverIndex, cancellationToken);
+
+
         if (driver.PageSource.Contains("<h1>Too Many Requests</h1>"))
         {
             Log.Warning("Too many requests found");
         }
+
         //TODO now only problem is with stuff like 429 too many requests can't be detected with selenium
         //but if checked using the httpclient it might not happen (because they use botdetection)
         //don't know how or if to handle that part?

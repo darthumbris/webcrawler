@@ -7,6 +7,9 @@
         //500ms delay between requests
         public TimeSpan RequestDelay { get; set; } = new TimeSpan(0, 0, 0, 0, 500);
 
+        public int MaxScrolls { get; set; } = 10;
+        public TimeSpan ScrollDelay { get; set; } = new TimeSpan(0, 0, 0, 0, 500);
+
 
         //750ms offset
         public TimeSpan RequestDelayOffset { get; set; } = new TimeSpan(0, 0, 0, 0, 750);
