@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using OpenQA.Selenium;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
@@ -23,7 +24,7 @@ public class CompanyChecker : ICompanyChecker
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
     }
 
-    public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, CancellationToken cancellationToken)
+    public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, IWebDriver driver, CancellationToken cancellationToken)
     {
         _score = 0;
         _reasons.Clear();
@@ -38,22 +39,18 @@ public class CompanyChecker : ICompanyChecker
 
         _baseUri = new Uri(domainUrl);
 
-        string hubUrl = "http://localhost:4444/wd/hub";
-        var pageHandler = new SeleniumPageHandler(BrowserType.Firefox, hubUrl, 1);
+        var pageHandler = new SeleniumPageHandler(driver);
 
         await _robotsService.LoadRobotTxt(domainUrl, _httpClient, cancellationToken);
 
         if (!_robotsService.IsAllowed(_baseUri.LocalPath, _crawlSettings.UserAgent))
         {
             Log.Information("Robot disallows checking {Url} stopping company check.", domainUrl);
-            pageHandler.Quit();
             return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotRefusal.ToString()]);
         }
 
-        var html = await pageHandler.FetchPageAsync(domainUrl, 0, cancellationToken);
-        var text = await pageHandler.ExecuteJavascript("return document.body.innerText;", 0, cancellationToken);
-
-        pageHandler.Quit();
+        var html = await pageHandler.FetchPageAsync(domainUrl, cancellationToken);
+        var text = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancellationToken);
 
         if (string.IsNullOrEmpty(html))
         {

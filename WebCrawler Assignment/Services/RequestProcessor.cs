@@ -43,11 +43,11 @@ namespace WebCrawler.Services
                 var timeout = new CancellationTokenSource(_requestOptions.RequestTimeOut).Token;
                 var cancel = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout).Token;
 
-                var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), info.DriverIndex, cancel);
+                var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
 
-                var extractedText = await pageHandler.ExecuteJavascript("return document.body.innerText;", info.DriverIndex, cancel);
-                var extractedCss = await pageHandler.ExecuteJavascript(cssGetterScript, info.DriverIndex, cancel);
-                var extractedJavascript = await pageHandler.ExecuteJavascript(javascriptGetterScript, info.DriverIndex, cancel);
+                var extractedText = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancel);
+                var extractedCss = await pageHandler.ExecuteJavascript(cssGetterScript, cancel);
+                var extractedJavascript = await pageHandler.ExecuteJavascript(javascriptGetterScript, cancel);
 
                 info.Timer.Stop();
 
@@ -69,7 +69,7 @@ namespace WebCrawler.Services
             }
             catch (OperationCanceledException) when (info.Cancellation.IsCancellationRequested)
             {
-                Log.Warning("Request {Url} cancelled", info.Location);
+                Log.Warning("Request {Url} cancelled elapsed: {Elapsed}ms cancel {Cancel}", info.Location, info.Timer.Elapsed.TotalMilliseconds, info.Cancellation);
                 return new ProcessResult
                 {
                     Location = info.Location,
@@ -109,6 +109,7 @@ namespace WebCrawler.Services
             return requestDelay;
         }
 
+        //TODO clean this up because max simultaneous requests is now 1
         public async Task ProcessAsync(Func<ProcessResult, Task> responseHandler, SeleniumPageHandler pageHandler, TimeSpan crawlDelay, CancellationToken cancellationToken)
         {
             var active = new ConcurrentDictionary<Task<ProcessResult>, ProcessInfo>(_requestOptions.MaxSimultanousRequests, _requestOptions.MaxSimultanousRequests);
@@ -116,11 +117,6 @@ namespace WebCrawler.Services
 
             var randomOffset = new Random();
             var requestsHandled = 0;
-
-            for (int i = 0; i < _requestOptions.MaxSimultanousRequests; i++)
-            {
-                availableDrivers.Enqueue(i);
-            }
 
             while (!active.IsEmpty || !RequestQueue.IsEmpty)
             {
@@ -137,7 +133,6 @@ namespace WebCrawler.Services
                             Timer = new Stopwatch(),
                             Delay = requestDelay,
                             Cancellation = cancellationToken,
-                            DriverIndex = availableDrivers.Dequeue(),
                         };
 
                         Log.Information("Request for {Url} starts with a delay of {Time}ms", url, requestDelay);
@@ -171,8 +166,6 @@ namespace WebCrawler.Services
                             ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
                         }
                     }
-
-                    availableDrivers.Enqueue(processInfo!.DriverIndex);
 
                     await responseHandler(completed.Result);
                 }

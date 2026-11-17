@@ -1,4 +1,5 @@
-﻿using Serilog;
+﻿using OpenQA.Selenium;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using WebCrawler.Configuration;
@@ -42,15 +43,6 @@ public sealed class CrawlService : ICrawlService
         _siteMapService = new SiteMapService(_httpClient);
     }
 
-    private void StartPageHandler()
-    {
-        //For Local testing don't use the hubUrl
-        string hubUrl = "http://localhost:4444/wd/hub";
-        _pageHandler = new SeleniumPageHandler(BrowserType.Firefox, hubUrl);
-        Log.Information("Done creating webdrivers");
-        //_pageHandler = new SeleniumPageHandler(BrowserType.Firefox);
-    }
-
     private async Task LoadSiteMaps(string url, CancellationToken cancellationToken)
     {
         Log.Information("loading Sitemaps from robots.txt file");
@@ -88,7 +80,7 @@ public sealed class CrawlService : ICrawlService
         Log.Information("Added {Count} sitemap urls of total {Total} found to request queue for domain: {Url}", sitemapUrls, mapLinks.Count, url);
     }
 
-    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, bool useSitemaps, CancellationToken cancellationToken)
+    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, bool useSitemaps, IWebDriver driver, CancellationToken cancellationToken)
     {
         _limitedCompanyCrawling = limitedCompanyCrawling;
         if (!(url.StartsWith("http://") || url.StartsWith("https://")))
@@ -116,7 +108,7 @@ public sealed class CrawlService : ICrawlService
             await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
         }
 
-        StartPageHandler();
+        _pageHandler = new SeleniumPageHandler(driver);
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
@@ -139,8 +131,6 @@ public sealed class CrawlService : ICrawlService
         _stopwatch.Stop();
 
         Log.Information("Crawl completed for domain: {Url} in {Time} seconds with {Count} pages fetched", url, _stopwatch.Elapsed.TotalSeconds, _fetchedPages.Count);
-
-        _pageHandler!.Quit();
 
         long crawledHtmlTotalLen = 0;
 

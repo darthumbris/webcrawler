@@ -1,12 +1,15 @@
-﻿using WebCrawler.Models;
+﻿using OpenQA.Selenium;
+using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
 public interface ICrawlService
 {
     Task<CrawlResult> CrawlAsync(
-        string domainName,
+        string url,
         bool limitedCompanyCrawling,
         bool useSitemaps,
-        CancellationToken cancellationToken);
+        IWebDriver driver,
+        CancellationToken cancellationToken
+        );
 }
