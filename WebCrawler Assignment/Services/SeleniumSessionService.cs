@@ -54,7 +54,6 @@ public class SeleniumSessionService
         try
         {
             var driver = WebcrawlerDriver.CreateGridInstance(type, _settings.HubUrl);
-            //TODO check the TryAdd probably
             _sessions.TryAdd(uid, (type, driver));
         }
         catch (Exception ex)
@@ -76,7 +75,6 @@ public class SeleniumSessionService
         try
         {
             var driver = WebcrawlerDriver.CreateGridInstance(type);
-            //TODO check the TryAdd probably
             _sessions.TryAdd(uid, (type, driver));
         }
         catch (Exception ex)

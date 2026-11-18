@@ -24,7 +24,7 @@ public sealed class SiteMapService
         };
 
         siteMapsUrls.AddRange(robotSiteMaps.Select(s => s.Url!));
-        siteMapsUrls = siteMapsUrls.Distinct().ToList();
+        siteMapsUrls = [.. siteMapsUrls.Distinct()];
 
         var loadedSiteMaps = new HashSet<Uri>();
 

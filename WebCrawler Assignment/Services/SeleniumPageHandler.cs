@@ -1,9 +1,7 @@
 ﻿namespace WebCrawler.Services;
 
 using OpenQA.Selenium;
-using Serilog;
 using WebCrawler.Configuration;
-using WebCrawler.Models;
 
 public sealed record FetchedSiteMap
 (
@@ -20,7 +18,6 @@ public sealed class SeleniumPageHandler(IWebDriver driver)
 
     private async Task ScrollPage(CancellationToken cancellationToken)
     {
-        //TODO see if need to do in a try?
         var scrollsPerformed = 0;
         var lastHeight = _executor.ExecuteScript("return document.body.scrollHeight");
 
