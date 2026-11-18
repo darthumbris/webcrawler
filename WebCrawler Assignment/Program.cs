@@ -62,7 +62,7 @@ app.MapPost("/crawl", async (
     return Results.Ok(result);
 });
 
-app.MapPost("/open", async(SessionOpenRequest request) =>
+app.MapPost("/open", async (SessionOpenRequest request) =>
 {
     Log.Information("open endpoint request: {Request}", request.ToString());
     var uid = seleniumSessionService.OpenSessionRemote(request.BrowserType);
@@ -70,17 +70,20 @@ app.MapPost("/open", async(SessionOpenRequest request) =>
     if (uid != null)
     {
         return Results.Ok(new SessionOpenResult(uid.ToString(), true));
-    } else
+    }
+    else
     {
         return Results.InternalServerError("Failed to open session");
     }
 });
 
-app.MapPost("/close", async (SessionCloseRequest request) => {
+app.MapPost("/close", async (SessionCloseRequest request) =>
+{
     if (seleniumSessionService.CloseSession(request.Uuid))
     {
         return Results.Ok(new SessionCloseResult(true));
-    } else
+    }
+    else
     {
         return Results.InternalServerError("Failed to close session");
     }
@@ -107,26 +110,22 @@ app.Run();
 
 //company:          curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"Uuid\": \"\" }" https://localhost:7299/company
 
-//Rest command om sessie te openen en sluiten
-//krijgt een ID
-//met die id kan je dan dingen uitvoeren
-//
-//rest command om company check uit te voeren , moet een result geven of een company is of niet met een reden
 //rest command om verder te crawlen , dit geeft de CrawlResult (is dit voor single page of zoals nu is dat ie sitemap en internal links etc gebruikt?)
 //rest command om js uit te voeren? (of moet dit in de crawl gedeelte)
 
 //moet dan denk ik bepaalde volgorde inzitten van de commands?
-// 0.? Misschien als eerste een robot check?
-// 1. preliminary company check
-// 2. crawl misschien bepaalde pagina's
-// 3. LLM check of company is
-// 4. Crawl de rest van de site
+// 0. sessie openen (/open)
+// 1. preliminary company check (/company)
+// 2. crawl misschien bepaalde pagina's (/crawl met CompanyCheck = true)
+// 3. LLM check of company is 
+// 4. Crawl de rest van de site (/crawl met CompanyCheck = false)
+// 5. sessie sluiten (/close)
 
 
 //TODO
-//3. na crawlen van website de sessie laten sluiten (Of moet dit via de /close endpoint ?)
-//7. na timeout moet de sessie gestopt worden (15 min) (Dit kan in de dockerfile gezet worden)
-//8. error handling per sessie handlen (dus catchen van timeout en crashes etc)
+//1. na crawlen van website de sessie laten sluiten (Of moet dit alleen via de /close endpoint ?)
+//2. na timeout moet de sessie gestopt worden (15 min) (Dit kan in de dockerfile gezet worden) (of moet de sessie handmatig worden ge quit en dan uit de session service gehaald worden?)
+//3. error handling per sessie handlen (dus catchen van timeout en crashes etc)
 
 //TODO Voor selenium grid kijk ook naar de Distributed Mode
 //hier je een router, distributor en nodes die daarmee connecten die allemaal

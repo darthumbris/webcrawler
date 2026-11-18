@@ -30,7 +30,7 @@ public class CompanyChecker : ICompanyChecker
         _reasons.Clear();
         _robotsService.Reset();
 
-        Log.Information("domainUrl: {Url}", domainUrl);
+        Log.Information("Performing preliminary company check for: {Url}", domainUrl);
 
         if (!(domainUrl.StartsWith("http://") || domainUrl.StartsWith("https://")))
         {
@@ -41,7 +41,15 @@ public class CompanyChecker : ICompanyChecker
 
         var pageHandler = new SeleniumPageHandler(driver);
 
-        await _robotsService.LoadRobotTxt(domainUrl, _httpClient, cancellationToken);
+        try
+        {
+            await _robotsService.LoadRobotTxt(domainUrl, _httpClient, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotRefusal.ToString()]);
+        }
 
         if (!_robotsService.IsAllowed(_baseUri.LocalPath, _crawlSettings.UserAgent))
         {
@@ -49,8 +57,23 @@ public class CompanyChecker : ICompanyChecker
             return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotRefusal.ToString()]);
         }
 
-        var html = await pageHandler.FetchPageAsync(domainUrl, cancellationToken);
-        var text = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancellationToken);
+        string html;
+        string text;
+        try
+        {
+            html = await pageHandler.FetchPageAsync(domainUrl, cancellationToken);
+            text = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancellationToken);
+        }
+        catch (OperationCanceledException oex)
+        {
+            Log.Information("Request was cancelled: {Exception}", oex.Message);
+            return new CompanyCheckResult(false, 0, [CompanyCheckReason.CancelRequested.ToString()]);
+        }
+        catch (Exception ex)
+        {
+            Log.Information("Failed to fetch page: {Exception}", ex.Message);
+            return new CompanyCheckResult(false, 0, [CompanyCheckReason.ParseFailure.ToString()]);
+        }
 
         if (string.IsNullOrEmpty(html))
         {

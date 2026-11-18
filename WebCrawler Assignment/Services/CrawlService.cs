@@ -67,7 +67,7 @@ public sealed class CrawlService : ICrawlService
         }
         else
         {
-            mapLinks = siteMapLinks.ToList();
+            mapLinks = [.. siteMapLinks];
         }
         foreach (var link in mapLinks)
         {
@@ -99,7 +99,15 @@ public sealed class CrawlService : ICrawlService
             Log.Information("Starting crawl for domain: {Url}", url);
             _maxPages = _crawlSettings.MaxPages;
         }
-        await LoadRobot(url, cancellationToken);
+        try
+        {
+            await _robotsService.LoadRobotTxt(url, _httpClient, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            return new CrawlResult([], [], [], [], [], []);
+        }
 
         AddRequest(_baseUri);
 
@@ -230,7 +238,7 @@ public sealed class CrawlService : ICrawlService
         }
         else
         {
-            Log.Warning("Request for {Url} was already handled. Will not add again.", url);
+            Log.Information("Request for {Url} was already handled. Will not add again.", url);
         }
         return false;
     }
@@ -320,11 +328,6 @@ public sealed class CrawlService : ICrawlService
             cancellation
             );
         Log.Information("Completed crawling {Count} pages", _fetchedPages.Count);
-        return _fetchedPages.ToArray();
-    }
-
-    private async Task LoadRobot(string url, CancellationToken cancellationToken)
-    {
-        await _robotsService.LoadRobotTxt(url, _httpClient, cancellationToken);
+        return [.. _fetchedPages];
     }
 }

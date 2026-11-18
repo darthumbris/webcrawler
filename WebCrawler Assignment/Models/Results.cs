@@ -13,6 +13,7 @@ public enum CompanyCheckReason
 {
     RobotRefusal,
     ParseFailure,
+    CancelRequested,
     CompanyFooterIndicationFound,
     NotCompanyFooterIndicationFound,
     CompanyJsonIndicationFound,
