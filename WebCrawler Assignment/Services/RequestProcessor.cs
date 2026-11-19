@@ -1,7 +1,6 @@
 ﻿using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Runtime.ExceptionServices;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
@@ -32,7 +31,7 @@ public class RequestProcessor
         //add delay to task if needed
         if (info.Delay > 0)
         {
-            await Task.Delay(((int)info.Delay));
+            await Task.Delay(((int)info.Delay), info.Cancellation);
         }
 
         var startTime = DateTime.Now;
@@ -40,8 +39,9 @@ public class RequestProcessor
 
         try
         {
-            var timeout = new CancellationTokenSource(_requestOptions.RequestTimeOut).Token;
-            var cancel = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout).Token;
+            using var timeout = new CancellationTokenSource(_requestOptions.RequestTimeOut);
+            using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout.Token);
+            var cancel = linkedSource.Token;
 
             var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
 
@@ -69,14 +69,9 @@ public class RequestProcessor
         }
         catch (OperationCanceledException) when (info.Cancellation.IsCancellationRequested)
         {
-            Log.Warning("Request {Url} cancelled elapsed: {Elapsed}ms cancel {Cancel}", info.Location, info.Timer.Elapsed.TotalMilliseconds, info.Cancellation);
-            return new ProcessResult
-            {
-                Location = info.Location,
-                StartTime = startTime,
-                Delay = info.Delay,
-                ElapsedTime = info.Timer.Elapsed,
-            };
+            info.Timer.Stop();
+            Log.Warning("Request {Url} cancelled elapsed: {Elapsed}ms", info.Location, info.Timer.Elapsed.TotalMilliseconds);
+            throw;
         }
         catch (Exception ex)
         {
@@ -130,21 +125,17 @@ public class RequestProcessor
 
                 Log.Information("Request for {Url} starts with a delay of {Time}ms", url, requestDelay);
 
-                var task = ProcessAsync(processInfo, pageHandler);
-                requestsHandled++;
-
-                cancellationToken.ThrowIfCancellationRequested();
-                PendingRequests--;
-                if (task.IsFaulted)
+                try
                 {
-                    var exception = task.Exception;
-                    if (exception != null && exception.InnerException != null)
-                    {
-                        Log.Warning("completed request for {Url} had an exception: {Msg}", processInfo.Location, exception);
-                        ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
-                    }
+                    var result = await ProcessAsync(processInfo, pageHandler);
+                    requestsHandled++;
+
+                    await responseHandler(result);
                 }
-                await responseHandler(task.Result);
+                finally
+                {
+                    PendingRequests--;
+                }
             }
         }
 

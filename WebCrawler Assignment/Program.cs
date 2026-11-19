@@ -4,8 +4,13 @@ using WebCrawler.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<ICrawlService, CrawlService>();
+builder.Services.AddScoped<ICompanyChecker, CompanyChecker>();
+builder.Services.AddHttpClient("Crawler", client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
+    //client.Timeout
+});
 
-var companyChecker = new CompanyChecker();
 var seleniumSessionService = new SeleniumSessionService();
 
 Log.Logger = new LoggerConfiguration()
@@ -16,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 var app = builder.Build();
 
-app.MapPost("/company", async (CompanyRequest request, CancellationToken cancellationToken) =>
+app.MapPost("/company", async (CompanyRequest request, ICompanyChecker companyChecker, CancellationToken cancellationToken) =>
 {
     Log.Information("Company Check end point.");
     if (string.IsNullOrWhiteSpace(request.DomainName))
@@ -62,7 +67,7 @@ app.MapPost("/crawl", async (
     return Results.Ok(result);
 });
 
-app.MapPost("/open", async (SessionOpenRequest request) =>
+app.MapPost("/open", (SessionOpenRequest request) =>
 {
     Log.Information("open endpoint request: {Request}", request.ToString());
     var uid = seleniumSessionService.OpenSessionRemote(request.BrowserType);
@@ -77,7 +82,7 @@ app.MapPost("/open", async (SessionOpenRequest request) =>
     }
 });
 
-app.MapPost("/close", async (SessionCloseRequest request) =>
+app.MapPost("/close", (SessionCloseRequest request) =>
 {
     if (seleniumSessionService.CloseSession(request.Uuid))
     {
@@ -91,6 +96,7 @@ app.MapPost("/close", async (SessionCloseRequest request) =>
 
 app.MapGet("/health", () =>
 {
+    //TODO Kan hier ook laten zien hoeveel open sessions?
     return Results.Ok(new
     {
         status = "healthy",
@@ -124,8 +130,10 @@ app.Run();
 
 //TODO
 //1. na crawlen van website de sessie laten sluiten (Of moet dit alleen via de /close endpoint ?)
+//miscchien een service die checkt hoelang er geen activiteit is geweest en zelf hem closed en removed?
 //2. na timeout moet de sessie gestopt worden (15 min) (Dit kan in de dockerfile gezet worden) (of moet de sessie handmatig worden ge quit en dan uit de session service gehaald worden?)
-//3. error handling per sessie handlen (dus catchen van timeout en crashes etc)
+//3. misschien gebruik builder.Services.AddHttpClient() ipv overal een aparte HttpClient te hebben?
+//4. alleen http en https toelaten (Dus domainUrl MOET http:// of https:// bevatten!!!!)
 
 //TODO Voor selenium grid kijk ook naar de Distributed Mode
 //hier je een router, distributor en nodes die daarmee connecten die allemaal

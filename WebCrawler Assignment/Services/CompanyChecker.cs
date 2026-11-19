@@ -9,7 +9,7 @@ namespace WebCrawler.Services;
 public class CompanyChecker : ICompanyChecker
 {
     private readonly RobotsService _robotsService = new();
-    private readonly HttpClient _httpClient = new();
+    private readonly HttpClient _httpClient;
     private readonly CrawlerSettings _crawlSettings = new();
     private readonly SchemaParser _schemaParser = new();
     private readonly HtmlExtractor _htmlExtractor = new();
@@ -19,16 +19,14 @@ public class CompanyChecker : ICompanyChecker
     private int _score;
     private readonly List<string> _reasons = [];
 
-    public CompanyChecker()
+    public CompanyChecker(IHttpClientFactory httpClientFactory)
     {
-        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
+        _httpClient = httpClientFactory.CreateClient("Crawler");
     }
 
     public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, IWebDriver driver, CancellationToken cancellationToken)
     {
         _score = 0;
-        _reasons.Clear();
-        _robotsService.Reset();
 
         Log.Information("Performing preliminary company check for: {Url}", domainUrl);
 
@@ -37,18 +35,27 @@ public class CompanyChecker : ICompanyChecker
             domainUrl = "https://" + domainUrl;
         }
 
-        _baseUri = new Uri(domainUrl);
-
         var pageHandler = new SeleniumPageHandler(driver);
 
         try
         {
+            _baseUri = new Uri(domainUrl);
             await _robotsService.LoadRobotTxt(domainUrl, _httpClient, cancellationToken);
         }
-        catch (Exception ex)
+        catch (UriFormatException ex)
+        {
+            Log.Information("Failed to check {Url}: {Exception}", domainUrl, ex.Message);
+            return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
+        }
+        catch (InvalidOperationException ex)
         {
             Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
-            return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotRefusal.ToString()]);
+            return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
+        }
+        catch (HttpRequestException ex)
+        {
+            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
         }
 
         if (!_robotsService.IsAllowed(_baseUri.LocalPath, _crawlSettings.UserAgent))
@@ -66,8 +73,8 @@ public class CompanyChecker : ICompanyChecker
         }
         catch (OperationCanceledException oex)
         {
-            Log.Information("Request was cancelled: {Exception}", oex.Message);
-            return new CompanyCheckResult(false, 0, [CompanyCheckReason.CancelRequested.ToString()]);
+            Log.Information("Company check was cancelled: {Exception}", oex.Message);
+            throw;
         }
         catch (Exception ex)
         {

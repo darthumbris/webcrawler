@@ -29,7 +29,7 @@ public sealed class CrawlService : ICrawlService
 
     private readonly HtmlExtractor _htmlExtractor = new();
 
-    private readonly HttpClient _httpClient = new();
+    private readonly HttpClient _httpClient;
 
     private readonly RequestProcessor _requestProcessor = new();
     private readonly SiteMapService _siteMapService;
@@ -38,8 +38,9 @@ public sealed class CrawlService : ICrawlService
     private Uri? _baseUri;
     bool _limitedCompanyCrawling = true;
 
-    public CrawlService()
+    public CrawlService(IHttpClientFactory httpClientFactory)
     {
+        _httpClient = httpClientFactory.CreateClient("Crawler");
         _siteMapService = new SiteMapService(_httpClient);
     }
 
@@ -88,7 +89,6 @@ public sealed class CrawlService : ICrawlService
             url = "https://" + url;
         }
 
-        _baseUri = new Uri(url);
         if (limitedCompanyCrawling)
         {
             Log.Information("Starting crawl for domain: {Url} using filtering", url);
@@ -101,9 +101,20 @@ public sealed class CrawlService : ICrawlService
         }
         try
         {
+            _baseUri = new Uri(url);
             await _robotsService.LoadRobotTxt(url, _httpClient, cancellationToken);
         }
-        catch (Exception ex)
+        catch (UriFormatException ex)
+        {
+            Log.Information("Domain url {Url} was not correct encountered exception: {Exception}", url, ex.Message);
+            return new CrawlResult([], [], [], [], [], []);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            return new CrawlResult([], [], [], [], [], []);
+        }
+        catch (HttpRequestException ex)
         {
             Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
             return new CrawlResult([], [], [], [], [], []);
@@ -170,7 +181,7 @@ public sealed class CrawlService : ICrawlService
     {
         var uri = StripFragmentUri(new Uri(url));
         var visitedUrl = StripPrefix(uri);
-        if (_visited.ContainsKey(visitedUrl))
+        if (visitedUrl == null || _visited.ContainsKey(visitedUrl))
         {
             return;
         }
