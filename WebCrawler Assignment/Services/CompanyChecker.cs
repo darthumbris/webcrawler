@@ -1,15 +1,14 @@
 ﻿using HtmlAgilityPack;
-using OpenQA.Selenium;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
-public class CompanyChecker : ICompanyChecker
+public class CompanyChecker(IHttpClientFactory httpClientFactory) : ICompanyChecker
 {
     private readonly RobotsService _robotsService = new();
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _httpClient = httpClientFactory.CreateClient("Crawler");
     private readonly CrawlerSettings _crawlSettings = new();
     private readonly SchemaParser _schemaParser = new();
     private readonly HtmlExtractor _htmlExtractor = new();
@@ -19,12 +18,7 @@ public class CompanyChecker : ICompanyChecker
     private int _score;
     private readonly List<string> _reasons = [];
 
-    public CompanyChecker(IHttpClientFactory httpClientFactory)
-    {
-        _httpClient = httpClientFactory.CreateClient("Crawler");
-    }
-
-    public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, IWebDriver driver, CancellationToken cancellationToken)
+    public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, SessionEntry session, CancellationToken cancellationToken)
     {
         _score = 0;
 
@@ -35,7 +29,7 @@ public class CompanyChecker : ICompanyChecker
             domainUrl = "https://" + domainUrl;
         }
 
-        var pageHandler = new SeleniumPageHandler(driver);
+        var pageHandler = new SeleniumPageHandler(session);
 
         try
         {

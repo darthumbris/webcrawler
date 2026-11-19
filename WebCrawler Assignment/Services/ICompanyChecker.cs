@@ -1,9 +1,8 @@
-﻿using OpenQA.Selenium;
-using WebCrawler.Models;
+﻿using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
 public interface ICompanyChecker
 {
-    Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, IWebDriver driver, CancellationToken cancellationToken);
+    Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, SessionEntry session, CancellationToken cancellationToken);
 }

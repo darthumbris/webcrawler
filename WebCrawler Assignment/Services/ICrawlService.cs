@@ -1,5 +1,4 @@
-﻿using OpenQA.Selenium;
-using WebCrawler.Models;
+﻿using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
@@ -9,7 +8,7 @@ public interface ICrawlService
         string url,
         bool limitedCompanyCrawling,
         bool useSitemaps,
-        IWebDriver driver,
+        SessionEntry session,
         CancellationToken cancellationToken
         );
 }

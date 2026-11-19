@@ -6,14 +6,9 @@ using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
-//TODO misschien moet elke sessie ook een timestamp / last used timestamp hebben
-//dan kan een andere service de sessie zelf closen na een bepaalde timeout
-//dan wordt ie namelijk ook uit de sessions gehaald ook al wordt de /close nooit gecalled
-//
-
 public class SeleniumSessionService
 {
-    private readonly ConcurrentDictionary<Guid, (BrowserType, IWebDriver)> _sessions = [];
+    private readonly ConcurrentDictionary<Guid, SessionEntry> _sessions = [];
 
     private readonly CrawlerSettings _settings = new();
 
@@ -24,6 +19,42 @@ public class SeleniumSessionService
         [BrowserType.Edge] = 0,
         [BrowserType.Firefox] = 0
     };
+
+    public void CloseExpiredSessions()
+    {
+        List<(Guid Id, SessionEntry Session)> expiredSessions = [];
+
+        lock (_sessionLock)
+        {
+            var cutoff = DateTimeOffset.UtcNow - SessionTimeout;
+
+            foreach (var sessionPair in _sessions)
+            {
+                var session = sessionPair.Value;
+
+                if (session.LastActivity <= cutoff && !session.RequestOnGoing && _sessions.TryRemove(sessionPair.Key, out var removedSession))
+                {
+                    _activeSessions[removedSession.BrowserType]--;
+                    expiredSessions.Add((sessionPair.Key, removedSession));
+                }
+            }
+        }
+
+        foreach (var (Id, Session) in expiredSessions)
+        {
+            try
+            {
+                Session.Driver.Quit();
+                Log.Information("Closed expired Selenium session {Id}", Id);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Failed to close expired Selenium session {Id}", Id);
+            }
+        }
+    }
+
+    private static readonly TimeSpan SessionTimeout = TimeSpan.FromMinutes(15);
 
     private int GetMaximumSessions(BrowserType type)
     {
@@ -73,27 +104,40 @@ public class SeleniumSessionService
         }
 
         var uid = Guid.NewGuid();
+        IWebDriver driver;
         try
         {
-            var driver = WebcrawlerDriver.CreateGridInstance(type, _settings.HubUrl);
-            lock (_sessionLock)
-            {
-                if (!_sessions.TryAdd(uid, (type, driver)))
-                {
-                    driver.Quit();
-                    _activeSessions[type]--;
-                    Log.Information("Failed to add the session");
-                    return null;
-                }
-            }
-            return uid;
+            driver = WebcrawlerDriver.CreateGridInstance(type, _settings.HubUrl);
         }
         catch (Exception ex)
         {
             ReleaseSessionSlot(type);
-            Log.Warning("Failed to create webdriver for {Type} and url {Url}: {Message}", type, _settings.HubUrl, ex.Message);
+            Log.Information("Failed to create webdriver for {Type} and url {Url}: {Message}", type, _settings.HubUrl, ex.Message);
             return null;
         }
+        bool added;
+
+        lock (_sessionLock)
+        {
+            added = _sessions.TryAdd(
+                uid,
+                new SessionEntry(type, driver));
+        }
+        if (!added)
+        {
+            try
+            {
+                driver.Quit();
+            }
+            finally
+            {
+                ReleaseSessionSlot(type);
+            }
+
+            Log.Warning("Failed to add session {Id}", uid);
+            return null;
+        }
+        return uid;
     }
 
     public Guid? OpenSessionLocal(BrowserType type)
@@ -105,27 +149,40 @@ public class SeleniumSessionService
         }
 
         var uid = Guid.NewGuid();
+        IWebDriver driver;
         try
         {
-            var driver = WebcrawlerDriver.CreateGridInstance(type);
-            lock (_sessionLock)
-            {
-                if (!_sessions.TryAdd(uid, (type, driver)))
-                {
-                    driver.Quit();
-                    _activeSessions[type]--;
-                    Log.Information("Failed to add the session");
-                    return null;
-                }
-            }
-            return uid;
+            driver = WebcrawlerDriver.CreateGridInstance(type);
         }
         catch (Exception ex)
         {
             ReleaseSessionSlot(type);
-            Log.Warning("Failed to create local webdriver for {Type}: {Message}", type, ex.Message);
+            Log.Information("Failed to create local webdriver for {Type}: {Message}", type, ex.Message);
             return null;
         }
+        bool added;
+
+        lock (_sessionLock)
+        {
+            added = _sessions.TryAdd(
+                uid,
+                new SessionEntry(type, driver));
+        }
+        if (!added)
+        {
+            try
+            {
+                driver.Quit();
+            }
+            finally
+            {
+                ReleaseSessionSlot(type);
+            }
+
+            Log.Warning("Failed to add session {Id}", uid);
+            return null;
+        }
+        return uid;
     }
 
     public bool CloseSession(string uuid)
@@ -136,17 +193,24 @@ public class SeleniumSessionService
             Log.Information("Failed to parse uuid {Uid}", uuid);
             return false;
         }
-        (BrowserType Type, IWebDriver Driver) session;
+        SessionEntry? session;
 
         lock (_sessionLock)
         {
-            if (!_sessions.Remove(uid, out session))
+            if (!_sessions.TryGetValue(uid, out session))
             {
                 Log.Information("Failed to close session for uid {Uid} session not found", uuid);
                 return false;
             }
 
-            _activeSessions[session.Type]--;
+            if (session.RequestOnGoing)
+            {
+                Log.Information("Can't close session {Id} because a request is ongoing.", uuid);
+                return false;
+            }
+
+            _sessions.TryRemove(uid, out _);
+            _activeSessions[session.BrowserType]--;
         }
 
         try
@@ -163,17 +227,47 @@ public class SeleniumSessionService
         }
     }
 
-    public IWebDriver? GetSession(string uuid)
+    public SessionEntry? BeginRequest(string uuid)
     {
         Log.Information("Trying to get the session for uuid: {Uid}", uuid);
-        if (Guid.TryParse(uuid, out var uid))
+        if (!Guid.TryParse(uuid, out var uid))
         {
-            if (_sessions.TryGetValue(uid, out var driver))
+            return null;
+        }
+        lock (_sessionLock)
+        {
+            if (!_sessions.TryGetValue(uid, out var session))
             {
-                return driver.Item2;
+                return null;
+            }
+
+            if (session.RequestOnGoing)
+            {
+                Log.Warning("There is already a request ongoing. Can't start multiple requests for a single session.");
+                return null;
+            }
+
+            session.RequestOnGoing = true;
+            session.LastActivity = DateTimeOffset.UtcNow;
+
+            return session;
+        }
+    }
+
+    public void EndRequest(string uuid)
+    {
+        Log.Information("Trying to close the session for uuid: {Uid}", uuid);
+        if (!Guid.TryParse(uuid, out var uid))
+        {
+            return;
+        }
+        lock (_sessionLock)
+        {
+            if (_sessions.TryGetValue(uid, out var session))
+            {
+                session.RequestOnGoing = false;
+                session.LastActivity = DateTimeOffset.UtcNow;
             }
         }
-        Log.Warning("Failed to find session for uuid: {Uid}", uuid);
-        return null;
     }
 }

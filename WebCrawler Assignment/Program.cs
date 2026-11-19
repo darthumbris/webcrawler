@@ -3,15 +3,14 @@ using WebCrawler.Models;
 using WebCrawler.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<SeleniumSessionService>();
+builder.Services.AddHostedService<SessionCleanupService>();
 builder.Services.AddScoped<ICrawlService, CrawlService>();
 builder.Services.AddScoped<ICompanyChecker, CompanyChecker>();
 builder.Services.AddHttpClient("Crawler", client =>
 {
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
-    //client.Timeout
 });
-
-var seleniumSessionService = new SeleniumSessionService();
 
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
@@ -21,56 +20,71 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 var app = builder.Build();
 
-app.MapPost("/company", async (CompanyRequest request, ICompanyChecker companyChecker, CancellationToken cancellationToken) =>
+app.MapPost("/company", async (
+    CompanyRequest request,
+    ICompanyChecker companyChecker,
+    SeleniumSessionService sessions,
+    CancellationToken cancellationToken
+    ) =>
 {
     Log.Information("Company Check end point.");
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
-    var driver = seleniumSessionService.GetSession(request.Uuid);
-    if (driver == null)
+    var session = sessions.BeginRequest(request.Uuid);
+    if (session == null)
     {
-        return Results.InternalServerError("Failed to get session");
+        return Results.InternalServerError("The session does not exist or is already processing a request.");
     }
-    var result = await companyChecker.CheckCompanyAsync(request.DomainName, driver, cancellationToken);
-
-    return Results.Ok(result);
+    try
+    {
+        var result = await companyChecker.CheckCompanyAsync(request.DomainName, session, cancellationToken);
+        return Results.Ok(result);
+    }
+    finally
+    {
+        sessions.EndRequest(request.Uuid);
+    }
 });
 
 app.MapPost("/crawl", async (
     CrawlRequest request,
     ICrawlService crawler,
+    SeleniumSessionService sessions,
     CancellationToken cancellationToken) =>
 {
     Log.Information("Crawl endpoint trying domain: {Url}", request.DomainName);
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
-    var driver = seleniumSessionService.GetSession(request.Uuid);
+    var session = sessions.BeginRequest(request.Uuid);
 
-    if (driver == null)
+    if (session == null)
     {
-        return Results.InternalServerError("Failed to get session");
+        return Results.InternalServerError("The session does not exist or is already processing a request.");
     }
-    //the CompanyCheck is so that the crawler only crawls pages using a filter
-    //These crawled pages can then be used by the next check to
-    //see if the url is a company
-    //if it is it can then do the /crawl with the CompanyCheck = false
-    //this way the crawler will crawl all pages
-    var result = await crawler.CrawlAsync(
-        request.DomainName,
-        request.CompanyCheck,
-        request.UseSitemaps ?? false,
-        driver,
-        cancellationToken);
 
-    return Results.Ok(result);
+    try
+    {
+        var result = await crawler.CrawlAsync(
+            request.DomainName,
+            request.CompanyCheck,
+            request.UseSitemaps ?? false,
+            session,
+            cancellationToken);
+
+        return Results.Ok(result);
+    }
+    finally
+    {
+        sessions.EndRequest(request.Uuid);
+    }
 });
 
-app.MapPost("/open", (SessionOpenRequest request) =>
+app.MapPost("/open", (SessionOpenRequest request, SeleniumSessionService sessions) =>
 {
     Log.Information("open endpoint request: {Request}", request.ToString());
-    var uid = seleniumSessionService.OpenSessionRemote(request.BrowserType);
+    var uid = sessions.OpenSessionRemote(request.BrowserType);
 
     if (uid != null)
     {
@@ -82,9 +96,9 @@ app.MapPost("/open", (SessionOpenRequest request) =>
     }
 });
 
-app.MapPost("/close", (SessionCloseRequest request) =>
+app.MapPost("/close", (SessionCloseRequest request, SeleniumSessionService sessions) =>
 {
-    if (seleniumSessionService.CloseSession(request.Uuid))
+    if (sessions.CloseSession(request.Uuid))
     {
         return Results.Ok(new SessionCloseResult(true));
     }
@@ -116,24 +130,8 @@ app.Run();
 
 //company:          curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"Uuid\": \"\" }" https://localhost:7299/company
 
-//rest command om verder te crawlen , dit geeft de CrawlResult (is dit voor single page of zoals nu is dat ie sitemap en internal links etc gebruikt?)
-//rest command om js uit te voeren? (of moet dit in de crawl gedeelte)
-
-//moet dan denk ik bepaalde volgorde inzitten van de commands?
-// 0. sessie openen (/open)
-// 1. preliminary company check (/company)
-// 2. crawl misschien bepaalde pagina's (/crawl met CompanyCheck = true)
-// 3. LLM check of company is 
-// 4. Crawl de rest van de site (/crawl met CompanyCheck = false)
-// 5. sessie sluiten (/close)
-
-
 //TODO
-//1. na crawlen van website de sessie laten sluiten (Of moet dit alleen via de /close endpoint ?)
-//miscchien een service die checkt hoelang er geen activiteit is geweest en zelf hem closed en removed?
-//2. na timeout moet de sessie gestopt worden (15 min) (Dit kan in de dockerfile gezet worden) (of moet de sessie handmatig worden ge quit en dan uit de session service gehaald worden?)
-//3. misschien gebruik builder.Services.AddHttpClient() ipv overal een aparte HttpClient te hebben?
-//4. alleen http en https toelaten (Dus domainUrl MOET http:// of https:// bevatten!!!!)
+//1. alleen http en https toelaten (Dus domainUrl MOET http:// of https:// bevatten!!!!)
 
 //TODO Voor selenium grid kijk ook naar de Distributed Mode
 //hier je een router, distributor en nodes die daarmee connecten die allemaal

@@ -1,5 +1,4 @@
-﻿using OpenQA.Selenium;
-using Serilog;
+﻿using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using WebCrawler.Configuration;
@@ -81,7 +80,7 @@ public sealed class CrawlService : ICrawlService
         Log.Information("Added {Count} sitemap urls of total {Total} found to request queue for domain: {Url}", sitemapUrls, mapLinks.Count, url);
     }
 
-    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, bool useSitemaps, IWebDriver driver, CancellationToken cancellationToken)
+    public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, bool useSitemaps, SessionEntry session, CancellationToken cancellationToken)
     {
         _limitedCompanyCrawling = limitedCompanyCrawling;
         if (!(url.StartsWith("http://") || url.StartsWith("https://")))
@@ -127,7 +126,7 @@ public sealed class CrawlService : ICrawlService
             await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
         }
 
-        _pageHandler = new SeleniumPageHandler(driver);
+        _pageHandler = new SeleniumPageHandler(session);
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);

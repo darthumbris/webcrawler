@@ -2,6 +2,7 @@
 
 using OpenQA.Selenium;
 using WebCrawler.Configuration;
+using WebCrawler.Models;
 
 public sealed record FetchedSiteMap
 (
@@ -10,11 +11,12 @@ public sealed record FetchedSiteMap
     Uri Url
 );
 
-public sealed class SeleniumPageHandler(IWebDriver driver)
+public sealed class SeleniumPageHandler(SessionEntry session)
 {
-    private readonly IWebDriver _driver = driver;
+    private readonly SessionEntry _session = session;
+    private readonly IWebDriver _driver = session.Driver;
     private readonly RequestOptions _requestOptions = new();
-    private readonly IJavaScriptExecutor _executor = (IJavaScriptExecutor)driver;
+    private readonly IJavaScriptExecutor _executor = (IJavaScriptExecutor)session.Driver;
 
     private async Task ScrollPage(CancellationToken cancellationToken)
     {
@@ -23,6 +25,7 @@ public sealed class SeleniumPageHandler(IWebDriver driver)
 
         while (scrollsPerformed < _requestOptions.MaxScrolls)
         {
+            _session.LastActivity = DateTimeOffset.UtcNow;
             _executor.ExecuteScript("window.scrollTo(0, document.body.scrollHeight);");
             await Task.Delay(_requestOptions.ScrollDelay, cancellationToken);
 
@@ -38,6 +41,7 @@ public sealed class SeleniumPageHandler(IWebDriver driver)
 
     public async Task<string> FetchPageAsync(string url, CancellationToken cancellationToken)
     {
+        _session.LastActivity = DateTimeOffset.UtcNow;
         cancellationToken.ThrowIfCancellationRequested();
         _driver.Navigate().GoToUrl(url);
         await ScrollPage(cancellationToken);
@@ -61,6 +65,7 @@ public sealed class SeleniumPageHandler(IWebDriver driver)
     public async Task<string> ExecuteJavascript(string javascript, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        _session.LastActivity = DateTimeOffset.UtcNow;
         return (string?)_executor.ExecuteScript(javascript) ?? string.Empty;
     }
 }
