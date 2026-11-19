@@ -11,6 +11,8 @@ public sealed record FetchedSiteMap
     Uri Url
 );
 
+//TODO maybe don't change the LastActivity here, RequestOngoing already protects it from getting closed
+//TODO check how to use the PinnedScript for the executescript
 public sealed class SeleniumPageHandler(SessionEntry session)
 {
     private readonly SessionEntry _session = session;

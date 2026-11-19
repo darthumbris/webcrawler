@@ -62,6 +62,7 @@ public sealed class SiteMapService(HttpClient httpClient)
         return loadedSiteMaps;
     }
 
+    //TODO check if need to be /text/plain or can just be /plain?
     private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("application/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("/plain", StringComparison.InvariantCultureIgnoreCase);
 
     private async Task<FetchedSiteMap> FetchSiteMapAsync(Uri siteMapUrl, CancellationToken cancellationToken)
@@ -107,6 +108,7 @@ public sealed class SiteMapService(HttpClient httpClient)
         }
     }
 
+    //TODO maybe change the Stack to a HashSet so no duplicates?
     public async Task<IEnumerable<FetchedSiteMap>> FetchSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
         Log.Information("Loading sitemap from: {Url}", baseUrl);
