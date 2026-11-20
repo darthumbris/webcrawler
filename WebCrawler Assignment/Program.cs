@@ -1,8 +1,25 @@
 using Serilog;
+using WebCrawler.Configuration;
 using WebCrawler.Models;
 using WebCrawler.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services
+    .AddOptions<CrawlerSettings>()
+    .Bind(builder.Configuration.GetSection("Crawler"))
+    .Validate(settings => settings.MaxPages > 0,
+        "MaxPages must be greater than zero.")
+    .Validate(settings => settings.MaxPagesCompanyCheck > 0,
+        "MaxPagesCompanyCheck must be greater than zero.")
+    .Validate(settings => settings.MaxRequestRetries >= 0,
+        "MaxRequestRetries cannot be negative.")
+    .Validate(settings => settings.MaxChromeSessions > 0,
+        "MaxChromeSessions must be greater than zero.")
+    .Validate(settings => settings.MaxFirefoxSessions > 0,
+        "MaxFirefoxSessions must be greater than zero.")
+    .Validate(settings => settings.MaxEdgeSessions > 0,
+        "MaxEdgeSessions must be greater than zero.")
+    .ValidateOnStart();
 builder.Services.AddSingleton<SeleniumSessionService>();
 builder.Services.AddHostedService<SessionCleanupService>();
 builder.Services.AddScoped<ICrawlService, CrawlService>();
@@ -31,14 +48,29 @@ app.MapPost("/company", async (
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
-    var session = sessions.BeginRequest(request.Uuid);
-    if (session == null)
+    if (!Uri.TryCreate(request.DomainName, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
     {
-        return Results.InternalServerError("The session does not exist or is already processing a request.");
+        return Results.BadRequest(
+            "DomainName must be a valid HTTP or HTTPS URL.");
+    }
+
+    var (session, response) = sessions.BeginRequest(request.Uuid);
+    switch (response)
+    {
+        case SessionResponse.SessionFound:
+            break;
+        case SessionResponse.SessionNotFound:
+            return Results.NotFound("Session not found");
+        case SessionResponse.GuidParseFailure:
+            return Results.BadRequest("The uuid is not valid.");
+        case SessionResponse.SessionRequestOngoing:
+            return Results.Conflict("This session is already processing a request.");
+        default:
+            return Results.InternalServerError($"Company request failed: {response}");
     }
     try
     {
-        var result = await companyChecker.CheckCompanyAsync(request.DomainName, session, cancellationToken);
+        var result = await companyChecker.CheckCompanyAsync(request.DomainName, session!, cancellationToken);
         return Results.Ok(result);
     }
     finally
@@ -57,11 +89,26 @@ app.MapPost("/crawl", async (
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
-    var session = sessions.BeginRequest(request.Uuid);
-
-    if (session == null)
+    if (!Uri.TryCreate(request.DomainName, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
     {
-        return Results.InternalServerError("The session does not exist or is already processing a request.");
+        return Results.BadRequest(
+            "DomainName must be a valid HTTP or HTTPS URL.");
+    }
+
+    var (session, response) = sessions.BeginRequest(request.Uuid);
+
+    switch (response)
+    {
+        case SessionResponse.SessionFound:
+            break;
+        case SessionResponse.SessionNotFound:
+            return Results.NotFound("Session not found");
+        case SessionResponse.GuidParseFailure:
+            return Results.BadRequest("The uuid is not valid.");
+        case SessionResponse.SessionRequestOngoing:
+            return Results.Conflict("This session is already processing a request.");
+        default:
+            return Results.InternalServerError($"Crawl request failed: {response}");
     }
 
     try
@@ -70,7 +117,7 @@ app.MapPost("/crawl", async (
             request.DomainName,
             request.CompanyCheck,
             request.UseSitemaps ?? false,
-            session,
+            session!,
             cancellationToken);
 
         return Results.Ok(result);
@@ -84,28 +131,28 @@ app.MapPost("/crawl", async (
 app.MapPost("/open", (SessionOpenRequest request, SeleniumSessionService sessions) =>
 {
     Log.Information("open endpoint request: {Request}", request.ToString());
-    var uid = sessions.OpenSessionRemote(request.BrowserType);
+    var (uid, response) = sessions.OpenSessionRemote(request.BrowserType);
 
-    if (uid != null)
+    return response switch
     {
-        return Results.Ok(new SessionOpenResult(uid.ToString(), true));
-    }
-    else
-    {
-        return Results.InternalServerError("Failed to open session");
-    }
+        SessionResponse.SessionCreatedSuccessfully => Results.Ok(new SessionOpenResult(uid!.ToString(), true)),
+        SessionResponse.SessionLimitReached => TypedResults.Problem(title: "Session Limit Reached", statusCode: StatusCodes.Status503ServiceUnavailable),
+        SessionResponse.UnsupportedBrowserType => Results.BadRequest("Browsertype not supported"),
+        _ => Results.InternalServerError($"Failed to open session: {response}"),
+    };
 });
 
 app.MapPost("/close", (SessionCloseRequest request, SeleniumSessionService sessions) =>
 {
-    if (sessions.CloseSession(request.Uuid))
+    var closeResponse = sessions.CloseSession(request.Uuid);
+    return closeResponse switch
     {
-        return Results.Ok(new SessionCloseResult(true));
-    }
-    else
-    {
-        return Results.InternalServerError("Failed to close session");
-    }
+        SessionResponse.SessionClosedSuccessfully => Results.Ok(new SessionCloseResult(true)),
+        SessionResponse.SessionNotFound => Results.NotFound("Session not found"),
+        SessionResponse.SessionRequestOngoing => Results.Conflict("This session is still processing a request."),
+        SessionResponse.GuidParseFailure => Results.BadRequest("The uuid was not valid"),
+        _ => Results.InternalServerError($"Failed to close session: {closeResponse}"),
+    };
 });
 
 app.MapGet("/health", () =>
@@ -116,6 +163,7 @@ app.MapGet("/health", () =>
         status = "healthy",
         service = "webcrawler",
         timestamp = DateTimeOffset.UtcNow,
+        //sessions = 
     });
 });
 
