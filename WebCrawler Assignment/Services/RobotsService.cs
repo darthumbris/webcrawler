@@ -170,10 +170,6 @@ public sealed class RobotsService
 
     public async Task LoadRobotTxt(string url, HttpClient httpClient, CancellationToken cancellationToken)
     {
-        if (!(url.StartsWith("http://") || url.StartsWith("https://")))
-        {
-            url = "https://" + url;
-        }
         var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
 
         using var response = await httpClient.GetAsync(robotsUrl, cancellationToken);
