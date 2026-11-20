@@ -17,7 +17,7 @@ public sealed class SiteMapService(HttpClient httpClient)
             defaultSitemapUrl
         };
 
-        siteMapsUrls.AddRange(robotSiteMaps.Select(s => s.Url!));
+        siteMapsUrls.AddRange(robotSiteMaps.Select(s => s.Url).OfType<Uri>());
         siteMapsUrls = [.. siteMapsUrls.Distinct()];
 
         var loadedSiteMaps = new HashSet<Uri>();
@@ -28,8 +28,8 @@ public sealed class SiteMapService(HttpClient httpClient)
 
             try
             {
-                var sitemapRequest = new HttpRequestMessage(HttpMethod.Head, url);
-                var sitemapResponse = await _httpClient.SendAsync(sitemapRequest, cancellationToken);
+                using var sitemapRequest = new HttpRequestMessage(HttpMethod.Head, url);
+                using var sitemapResponse = await _httpClient.SendAsync(sitemapRequest, cancellationToken);
 
                 if (sitemapResponse.IsSuccessStatusCode)
                 {
@@ -40,10 +40,10 @@ public sealed class SiteMapService(HttpClient httpClient)
                 //check for too many requests etc
                 if ((int)sitemapResponse.StatusCode >= 400 && (int)sitemapResponse.StatusCode < 500 && sitemapResponse.StatusCode != HttpStatusCode.NotFound)
                 {
-                    sitemapRequest = new HttpRequestMessage(HttpMethod.Get, url);
-                    sitemapResponse = await _httpClient.SendAsync(sitemapRequest, cancellationToken);
+                    using var sitemapRequestRetry = new HttpRequestMessage(HttpMethod.Get, url);
+                    using var sitemapResponseRetry = await _httpClient.SendAsync(sitemapRequestRetry, cancellationToken);
 
-                    if (sitemapResponse.IsSuccessStatusCode)
+                    if (sitemapResponseRetry.IsSuccessStatusCode)
                     {
                         loadedSiteMaps.Add(url);
                     }
@@ -62,14 +62,13 @@ public sealed class SiteMapService(HttpClient httpClient)
         return loadedSiteMaps;
     }
 
-    //TODO check if need to be /text/plain or can just be /plain?
-    private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("application/xml", StringComparison.InvariantCultureIgnoreCase) || contentType.Equals("/plain", StringComparison.InvariantCultureIgnoreCase);
+    private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase);
 
     private async Task<FetchedSiteMap> FetchSiteMapAsync(Uri siteMapUrl, CancellationToken cancellationToken)
     {
         try
         {
-            var resp = await _httpClient.GetAsync(siteMapUrl, cancellationToken);
+            using var resp = await _httpClient.GetAsync(siteMapUrl, cancellationToken);
 
             if (resp.IsSuccessStatusCode)
             {
@@ -84,7 +83,7 @@ public sealed class SiteMapService(HttpClient httpClient)
                     var siteMapStream = stream;
 
                     using var reader = new StreamReader(siteMapStream);
-                    if (contentType.Equals("/plain", StringComparison.InvariantCultureIgnoreCase))
+                    if (contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase))
                     {
                         return await _siteMapParser.ParsePlainTxtSiteMapAsync(siteMapUrl, reader, cancellationToken);
                     }
@@ -94,6 +93,7 @@ public sealed class SiteMapService(HttpClient httpClient)
                     }
                 }
             }
+            Log.Information("Sitemap response was not succesfull {Response} skipping {Url}", resp.StatusCode, siteMapUrl);
             return new FetchedSiteMap([], [], siteMapUrl);
         }
         catch (OperationCanceledException)
@@ -108,31 +108,36 @@ public sealed class SiteMapService(HttpClient httpClient)
         }
     }
 
-    //TODO maybe change the Stack to a HashSet so no duplicates?
     public async Task<IEnumerable<FetchedSiteMap>> FetchSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
         Log.Information("Loading sitemap from: {Url}", baseUrl);
 
         var fetchedSiteMaps = new Dictionary<Uri, FetchedSiteMap>();
         var sitemapUrls = new Stack<Uri>(await LoadSiteMapsAsync(baseUrl, robotSiteMaps, cancellationToken));
+        //TODO maybe add the stupid HashSet discoveredSitemapUrls
+        //TODO should maybe also check if the sitemap still belongs to same domain?
 
         while (sitemapUrls.Count > 0)
         {
             var url = sitemapUrls.Pop();
+
+            if (fetchedSiteMaps.ContainsKey(url))
+            {
+                continue;
+            }
+
             var sitemapFile = await FetchSiteMapAsync(url, cancellationToken);
 
-            if (sitemapFile != null)
-            {
-                fetchedSiteMaps.Add(url, sitemapFile);
+            fetchedSiteMaps.Add(url, sitemapFile);
 
-                foreach (var siteMapIndexUrl in sitemapFile.SiteMaps)
+            foreach (var siteMapIndexUrl in sitemapFile.SiteMaps)
+            {
+                if (!fetchedSiteMaps.ContainsKey(siteMapIndexUrl))
                 {
-                    if (!fetchedSiteMaps.ContainsKey(siteMapIndexUrl))
-                    {
-                        sitemapUrls.Push(siteMapIndexUrl);
-                    }
+                    sitemapUrls.Push(siteMapIndexUrl);
                 }
             }
+
         }
 
         return fetchedSiteMaps.Values;

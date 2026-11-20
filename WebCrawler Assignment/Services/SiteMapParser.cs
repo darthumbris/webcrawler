@@ -52,7 +52,7 @@ public class SiteMapParser
             var name = node.Name.LocalName;
             if (name.Equals("urlset", StringComparison.InvariantCultureIgnoreCase))
             {
-                var links = new List<Uri>();
+                var links = new HashSet<Uri>();
 
                 foreach (var url in node.Elements())
                 {
@@ -67,7 +67,7 @@ public class SiteMapParser
             }
             if (name.Equals("sitemapindex", StringComparison.InvariantCultureIgnoreCase))
             {
-                var sitemapIndices = new List<Uri>();
+                var sitemapIndices = new HashSet<Uri>();
 
                 foreach (var url in node.Elements())
                 {
@@ -87,7 +87,7 @@ public class SiteMapParser
 
     public async Task<FetchedSiteMap> ParsePlainTxtSiteMapAsync(Uri siteMapUrl, StreamReader reader, CancellationToken cancellationToken)
     {
-        var links = new List<Uri>();
+        var links = new HashSet<Uri>();
         string? line;
 
         while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
