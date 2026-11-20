@@ -11,14 +11,11 @@ public sealed record FetchedSiteMap
     Uri Url
 );
 
-//TODO maybe don't change the LastActivity here, RequestOngoing already protects it from getting closed
-//TODO check how to use the PinnedScript for the executescript
-public sealed class SeleniumPageHandler(SessionEntry session)
+public sealed class SeleniumPageHandler(IWebDriver driver)
 {
-    private readonly SessionEntry _session = session;
-    private readonly IWebDriver _driver = session.Driver;
+    private readonly IWebDriver _driver = driver;
     private readonly RequestOptions _requestOptions = new();
-    private readonly IJavaScriptExecutor _executor = (IJavaScriptExecutor)session.Driver;
+    private readonly IJavaScriptExecutor _executor = (IJavaScriptExecutor)driver;
 
     private async Task ScrollPage(CancellationToken cancellationToken)
     {
@@ -27,7 +24,6 @@ public sealed class SeleniumPageHandler(SessionEntry session)
 
         while (scrollsPerformed < _requestOptions.MaxScrolls)
         {
-            _session.LastActivity = DateTimeOffset.UtcNow;
             _executor.ExecuteScript("window.scrollTo(0, document.body.scrollHeight);");
             await Task.Delay(_requestOptions.ScrollDelay, cancellationToken);
 
@@ -43,9 +39,8 @@ public sealed class SeleniumPageHandler(SessionEntry session)
 
     public async Task<string> FetchPageAsync(string url, CancellationToken cancellationToken)
     {
-        _session.LastActivity = DateTimeOffset.UtcNow;
         cancellationToken.ThrowIfCancellationRequested();
-        _driver.Navigate().GoToUrl(url);
+        await _driver.Navigate().GoToUrlAsync(url);
         await ScrollPage(cancellationToken);
 
         //really simple check for 429 Too many Requests
@@ -67,7 +62,6 @@ public sealed class SeleniumPageHandler(SessionEntry session)
     public async Task<string> ExecuteJavascript(string javascript, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _session.LastActivity = DateTimeOffset.UtcNow;
         return (string?)_executor.ExecuteScript(javascript) ?? string.Empty;
     }
 }
