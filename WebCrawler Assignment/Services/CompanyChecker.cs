@@ -6,11 +6,12 @@ using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
-public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options) : ICompanyChecker
+public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options, IOptions<RequestOptions> requestOptions) : ICompanyChecker
 {
     private readonly RobotsService _robotsService = new();
     private readonly HttpClient _httpClient = httpClientFactory.CreateClient("Crawler");
     private readonly CrawlerSettings _crawlSettings = options.Value;
+    private readonly RequestOptions _requestOptions = requestOptions.Value;
     private readonly SchemaParser _schemaParser = new();
     private readonly HtmlExtractor _htmlExtractor = new();
 
@@ -25,12 +26,7 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
 
         Log.Information("Performing preliminary company check for: {Url}", domainUrl);
 
-        if (!(domainUrl.StartsWith("http://") || domainUrl.StartsWith("https://")))
-        {
-            domainUrl = "https://" + domainUrl;
-        }
-
-        var pageHandler = new SeleniumPageHandler(session.Driver);
+        var pageHandler = new SeleniumPageHandler(session.Driver, _requestOptions);
 
         try
         {
@@ -39,17 +35,17 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
         }
         catch (UriFormatException ex)
         {
-            Log.Information("Failed to check {Url}: {Exception}", domainUrl, ex.Message);
+            Log.Information(ex, "Failed to check {Url}", domainUrl);
             return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
         }
         catch (InvalidOperationException ex)
         {
-            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            Log.Information(ex, "Failed to load robot.txt");
             return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
         }
         catch (HttpRequestException ex)
         {
-            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            Log.Information(ex, "Failed to load robot.txt");
             return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
         }
 
@@ -68,12 +64,12 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
         }
         catch (OperationCanceledException oex)
         {
-            Log.Information("Company check was cancelled: {Exception}", oex.Message);
+            Log.Information(oex, "Company check was cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            Log.Information("Failed to fetch page: {Exception}", ex.Message);
+            Log.Information(ex, "Failed to fetch page");
             return new CompanyCheckResult(false, 0, [CompanyCheckReason.ParseFailure.ToString()]);
         }
 
@@ -203,7 +199,7 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
         Log.Information("Checking for schema.org structured json.");
         if (doc.DocumentNode == null)
         {
-            Log.Information("Failed to check shema.org structured json because document is corrupted.");
+            Log.Information("Failed to check shema.org structured json because the document is corrupted.");
             return;
         }
 

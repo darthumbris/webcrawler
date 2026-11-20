@@ -13,10 +13,6 @@ public enum BrowserType
     Firefox
 }
 
-//TODO maybe set a PageLoad timeout (20 seconds or something)
-//for the drivers otherwise it can't be cancelled, or change the seleniumPageHandler to GoToUrlAsync ?
-//TODO also check if a similar timeout needs to be set for JS execution?
-
 public class WebcrawlerDriver
 {
     //Local

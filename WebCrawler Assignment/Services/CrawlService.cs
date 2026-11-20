@@ -31,18 +31,19 @@ public sealed class CrawlService : ICrawlService
 
     private readonly HttpClient _httpClient;
 
-    private readonly RequestProcessor _requestProcessor = new();
+    private readonly RequestProcessor _requestProcessor;
     private readonly SiteMapService _siteMapService;
     private int _maxPages = 0;
 
     private Uri? _baseUri;
     bool _limitedCompanyCrawling = true;
 
-    public CrawlService(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options)
+    public CrawlService(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options, IOptions<RequestOptions> requestOptions)
     {
         _httpClient = httpClientFactory.CreateClient("Crawler");
         _siteMapService = new SiteMapService(_httpClient);
         _crawlSettings = options.Value;
+        _requestProcessor = new(requestOptions);
     }
 
     private async Task LoadSiteMaps(string url, CancellationToken cancellationToken)
@@ -85,10 +86,6 @@ public sealed class CrawlService : ICrawlService
     public async Task<CrawlResult> CrawlAsync(string url, bool limitedCompanyCrawling, bool useSitemaps, SessionEntry session, CancellationToken cancellationToken)
     {
         _limitedCompanyCrawling = limitedCompanyCrawling;
-        if (!(url.StartsWith("http://") || url.StartsWith("https://")))
-        {
-            url = "https://" + url;
-        }
 
         if (limitedCompanyCrawling)
         {
@@ -107,17 +104,17 @@ public sealed class CrawlService : ICrawlService
         }
         catch (UriFormatException ex)
         {
-            Log.Information("Domain url {Url} was not correct encountered exception: {Exception}", url, ex.Message);
+            Log.Information(ex, "Domain url {Url} was not correct encountered exception", url);
             return new CrawlResult([], [], [], [], [], []);
         }
         catch (InvalidOperationException ex)
         {
-            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            Log.Information(ex, "Failed to load robot.txt");
             return new CrawlResult([], [], [], [], [], []);
         }
         catch (HttpRequestException ex)
         {
-            Log.Information("Failed to load robot.txt: {Exception}", ex.Message);
+            Log.Information(ex, "Failed to load robot.txt");
             return new CrawlResult([], [], [], [], [], []);
         }
 
@@ -128,7 +125,7 @@ public sealed class CrawlService : ICrawlService
             await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
         }
 
-        _pageHandler = new SeleniumPageHandler(session.Driver);
+        _pageHandler = new SeleniumPageHandler(session.Driver, _requestProcessor.RequestOptions);
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
@@ -271,7 +268,7 @@ public sealed class CrawlService : ICrawlService
             }
             else
             {
-                Log.Information("Sucesfully extracted request from {Url}.", url);
+                Log.Information("Successfully extracted request from {Url}.", url);
                 AddResult(content);
 
                 if (!robotHeader.NoFollow(_crawlSettings.UserAgent))

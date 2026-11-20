@@ -1,4 +1,5 @@
-﻿using Serilog;
+﻿using Microsoft.Extensions.Options;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using WebCrawler.Configuration;
@@ -9,13 +10,14 @@ namespace WebCrawler.Services;
 public class RequestProcessor
 {
     private ConcurrentQueue<Uri> RequestQueue { get; } = new();
-    private readonly RequestOptions _requestOptions = new();
+    public readonly RequestOptions RequestOptions;
     private readonly string cssGetterScript;
     private readonly string javascriptGetterScript;
     public int PendingRequests = 0;
 
-    public RequestProcessor()
+    public RequestProcessor(IOptions<RequestOptions> requestOptions)
     {
+        RequestOptions = requestOptions.Value;
         cssGetterScript = File.ReadAllText("./Scripts/get_all_css.js");
         javascriptGetterScript = File.ReadAllText("./Scripts/get_all_javascript.js");
     }
@@ -39,7 +41,7 @@ public class RequestProcessor
 
         try
         {
-            using var timeout = new CancellationTokenSource(_requestOptions.RequestTimeOut);
+            using var timeout = new CancellationTokenSource(RequestOptions.RequestTimeOut);
             using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout.Token);
             var cancel = linkedSource.Token;
 
@@ -77,7 +79,7 @@ public class RequestProcessor
         {
             info.Timer.Stop();
 
-            Log.Warning("Request for {Url} had Exception: {Exception} after {Time}ms", info.Location, ex.Message, info.Timer.ElapsedMilliseconds);
+            Log.Warning(ex, "Request for {Url} had Exception after {Time}ms", info.Location, info.Timer.ElapsedMilliseconds);
 
             return new ProcessResult
             {
@@ -93,14 +95,14 @@ public class RequestProcessor
     private double Delay(TimeSpan crawlDelay, Random randomOffset)
     {
         var requestDelay = crawlDelay.TotalMilliseconds;
-        var requestOptionDelay = _requestOptions.RequestDelay.TotalMilliseconds;
+        var requestOptionDelay = RequestOptions.RequestDelay.TotalMilliseconds;
 
         //Only add the extra delay if it is bigger then the CrawlDelay
         if (requestOptionDelay > 0 && requestOptionDelay > requestDelay)
         {
             requestDelay += requestOptionDelay;
         }
-        requestDelay += randomOffset.NextDouble() * _requestOptions.RequestDelayOffset.TotalMilliseconds;
+        requestDelay += randomOffset.NextDouble() * RequestOptions.RequestDelayOffset.TotalMilliseconds;
         return requestDelay;
     }
 

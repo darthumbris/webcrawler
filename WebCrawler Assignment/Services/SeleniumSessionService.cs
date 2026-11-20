@@ -43,7 +43,7 @@ public class SeleniumSessionService(IOptions<CrawlerSettings> options) : IDispos
 
         lock (_sessionLock)
         {
-            var cutoff = DateTimeOffset.UtcNow - SessionTimeout;
+            var cutoff = DateTimeOffset.UtcNow - _settings.SessionTimeOut;
 
             foreach (var sessionPair in _sessions)
             {
@@ -70,8 +70,6 @@ public class SeleniumSessionService(IOptions<CrawlerSettings> options) : IDispos
             }
         }
     }
-
-    private static readonly TimeSpan SessionTimeout = TimeSpan.FromMinutes(15);
 
     private int GetMaximumSessions(BrowserType type)
     {
@@ -215,7 +213,7 @@ public class SeleniumSessionService(IOptions<CrawlerSettings> options) : IDispos
         }
         catch (Exception ex)
         {
-            Log.Warning("Failed to close session {Uid} with exception {Exception}", uuid, ex.Message);
+            Log.Warning(ex, "Failed to close session {Uid}", uuid);
             return SessionResponse.SessionCloseFailure;
         }
     }
@@ -266,6 +264,8 @@ public class SeleniumSessionService(IOptions<CrawlerSettings> options) : IDispos
     public void Dispose()
     {
         List<SessionEntry> sessionsToClose;
+
+        Log.Information("Closing all remaining sessions");
 
         lock (_sessionLock)
         {

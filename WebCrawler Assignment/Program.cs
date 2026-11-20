@@ -19,6 +19,18 @@ builder.Services
         "MaxFirefoxSessions must be greater than zero.")
     .Validate(settings => settings.MaxEdgeSessions > 0,
         "MaxEdgeSessions must be greater than zero.")
+    .Validate(settings => settings.PageLoadTimeOut > TimeSpan.Zero, "PageLoadTimeOut must be greater than zero.")
+    .Validate(settings => settings.SessionTimeOut > TimeSpan.Zero, "SessionTimeOut must be greater than zero.")
+    .Validate(settings => string.IsNullOrEmpty(settings.HubUrl), "HubUrl can't be empty.")
+    .Validate(settings => string.IsNullOrEmpty(settings.UserAgent), "UserAgent can't be empty.")
+    .ValidateOnStart();
+builder.Services.AddOptions<RequestOptions>()
+    .Bind(builder.Configuration.GetSection("Requests"))
+    .Validate(settings => settings.RequestDelay >= TimeSpan.Zero, "Delay cannot be negative.")
+    .Validate(settings => settings.RequestDelayOffset >= TimeSpan.Zero, "DelayOffset cannot be negative.")
+    .Validate(settings => settings.ScrollDelay >= TimeSpan.Zero, "ScrollDelay cannot be negative.")
+    .Validate(settings => settings.RequestTimeOut > TimeSpan.Zero, "RequestTimeout must be greater than zero.")
+    .Validate(settings => settings.MaxScrolls > 0, "MaxScrolls must be greater than zero.")
     .ValidateOnStart();
 builder.Services.AddSingleton<SeleniumSessionService>();
 builder.Services.AddHostedService<SessionCleanupService>();
@@ -44,7 +56,7 @@ app.MapPost("/company", async (
     CancellationToken cancellationToken
     ) =>
 {
-    Log.Information("Company Check end point.");
+    Log.Information("Company check end point.");
     if (string.IsNullOrWhiteSpace(request.DomainName))
         return Results.BadRequest("domainName is required.");
 
@@ -177,9 +189,6 @@ app.Run();
 //crawl:            curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"Uuid\": \"\", \"CompanyCheck\": false, \"UseSitemaps\": false }" https://localhost:7299/crawl
 
 //company:          curl -X POST -H "Content-Type: application/json" -d "{ \"DomainName\": \"www.coppermine.nl\", \"Uuid\": \"\" }" https://localhost:7299/company
-
-//TODO
-//1. alleen http en https toelaten (Dus domainUrl MOET http:// of https:// bevatten!!!!)
 
 //TODO Voor selenium grid kijk ook naar de Distributed Mode
 //hier je een router, distributor en nodes die daarmee connecten die allemaal

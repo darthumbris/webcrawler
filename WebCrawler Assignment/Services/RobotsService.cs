@@ -176,7 +176,6 @@ public sealed class RobotsService
         }
         var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
 
-        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
         using var response = await httpClient.GetAsync(robotsUrl, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 

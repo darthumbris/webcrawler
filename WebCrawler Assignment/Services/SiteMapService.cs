@@ -10,7 +10,8 @@ public sealed class SiteMapService(HttpClient httpClient)
 
     private async Task<IEnumerable<Uri>> LoadSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
-        var defaultSitemapUrl = new Uri(new Uri(baseUrl), "/sitemap.xml");
+        var baseUri = new Uri(baseUrl);
+        var defaultSitemapUrl = new Uri(baseUri, "/sitemap.xml");
 
         var siteMapsUrls = new List<Uri>
         {
@@ -25,6 +26,12 @@ public sealed class SiteMapService(HttpClient httpClient)
         foreach (var url in siteMapsUrls)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (!IsAllowedSitemap(url, baseUri))
+            {
+                Log.Warning("Skipping sitemap outside allowed host: {Url}", url);
+                continue;
+            }
 
             try
             {
@@ -56,7 +63,7 @@ public sealed class SiteMapService(HttpClient httpClient)
             }
             catch (Exception ex)
             {
-                Log.Warning("Failed to load sitemap from {Url} with exception: {Text}", url, ex.Message);
+                Log.Warning(ex, "Failed to load sitemap from {Url}", url);
             }
         }
         return loadedSiteMaps;
@@ -93,7 +100,7 @@ public sealed class SiteMapService(HttpClient httpClient)
                     }
                 }
             }
-            Log.Information("Sitemap response was not succesfull {Response} skipping {Url}", resp.StatusCode, siteMapUrl);
+            Log.Information("Sitemap response was not successful {Response} skipping {Url}.", resp.StatusCode, siteMapUrl);
             return new FetchedSiteMap([], [], siteMapUrl);
         }
         catch (OperationCanceledException)
@@ -103,19 +110,29 @@ public sealed class SiteMapService(HttpClient httpClient)
         }
         catch (Exception ex)
         {
-            Log.Warning("Failed to load sitemap from {Url} with exception: {Text}", siteMapUrl, ex.Message);
+            Log.Warning(ex, "Failed to load sitemap from {Url}", siteMapUrl);
             return new FetchedSiteMap([], [], siteMapUrl);
         }
+    }
+
+    //TODO maybe should allow sitemap outside domain?
+    private static bool IsAllowedSitemap(Uri sitemapUrl, Uri baseUrl)
+    {
+        return (sitemapUrl.Scheme == Uri.UriSchemeHttp ||
+            sitemapUrl.Scheme == Uri.UriSchemeHttps) &&
+           sitemapUrl.Host.Equals(
+               baseUrl.Host,
+               StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<IEnumerable<FetchedSiteMap>> FetchSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
         Log.Information("Loading sitemap from: {Url}", baseUrl);
 
+        var baseUri = new Uri(baseUrl);
         var fetchedSiteMaps = new Dictionary<Uri, FetchedSiteMap>();
         var sitemapUrls = new Stack<Uri>(await LoadSiteMapsAsync(baseUrl, robotSiteMaps, cancellationToken));
         //TODO maybe add the stupid HashSet discoveredSitemapUrls
-        //TODO should maybe also check if the sitemap still belongs to same domain?
 
         while (sitemapUrls.Count > 0)
         {
@@ -126,13 +143,20 @@ public sealed class SiteMapService(HttpClient httpClient)
                 continue;
             }
 
+            if (!IsAllowedSitemap(url, baseUri))
+            {
+                Log.Warning("Skipping sitemap outside allowed host: {Url}", url);
+                continue;
+            }
+
             var sitemapFile = await FetchSiteMapAsync(url, cancellationToken);
 
             fetchedSiteMaps.Add(url, sitemapFile);
 
             foreach (var siteMapIndexUrl in sitemapFile.SiteMaps)
             {
-                if (!fetchedSiteMaps.ContainsKey(siteMapIndexUrl))
+                if (IsAllowedSitemap(siteMapIndexUrl, baseUri) &&
+                    !fetchedSiteMaps.ContainsKey(siteMapIndexUrl))
                 {
                     sitemapUrls.Push(siteMapIndexUrl);
                 }

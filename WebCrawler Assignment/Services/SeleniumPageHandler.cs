@@ -11,10 +11,10 @@ public sealed record FetchedSiteMap
     Uri Url
 );
 
-public sealed class SeleniumPageHandler(IWebDriver driver)
+public sealed class SeleniumPageHandler(IWebDriver driver, RequestOptions options)
 {
     private readonly IWebDriver _driver = driver;
-    private readonly RequestOptions _requestOptions = new();
+    private readonly RequestOptions _requestOptions = options;
     private readonly IJavaScriptExecutor _executor = (IJavaScriptExecutor)driver;
 
     private async Task ScrollPage(CancellationToken cancellationToken)
