@@ -1,15 +1,16 @@
 ﻿using HtmlAgilityPack;
+using Microsoft.Extensions.Options;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
-public class CompanyChecker(IHttpClientFactory httpClientFactory) : ICompanyChecker
+public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options) : ICompanyChecker
 {
     private readonly RobotsService _robotsService = new();
     private readonly HttpClient _httpClient = httpClientFactory.CreateClient("Crawler");
-    private readonly CrawlerSettings _crawlSettings = new();
+    private readonly CrawlerSettings _crawlSettings = options.Value;
     private readonly SchemaParser _schemaParser = new();
     private readonly HtmlExtractor _htmlExtractor = new();
 
@@ -29,7 +30,7 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory) : ICompanyChec
             domainUrl = "https://" + domainUrl;
         }
 
-        var pageHandler = new SeleniumPageHandler(session);
+        var pageHandler = new SeleniumPageHandler(session.Driver);
 
         try
         {

@@ -1,4 +1,5 @@
-﻿using Serilog;
+﻿using Microsoft.Extensions.Options;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using WebCrawler.Configuration;
@@ -20,7 +21,7 @@ public sealed class CrawlService : ICrawlService
     private readonly List<string> _collectedInternalLinks = [];
     private readonly List<string> _collectedExternalLinks = [];
 
-    private readonly CrawlerSettings _crawlSettings = new();
+    private readonly CrawlerSettings _crawlSettings;
 
     private readonly Stopwatch _stopwatch = new();
 
@@ -37,10 +38,11 @@ public sealed class CrawlService : ICrawlService
     private Uri? _baseUri;
     bool _limitedCompanyCrawling = true;
 
-    public CrawlService(IHttpClientFactory httpClientFactory)
+    public CrawlService(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options)
     {
         _httpClient = httpClientFactory.CreateClient("Crawler");
         _siteMapService = new SiteMapService(_httpClient);
+        _crawlSettings = options.Value;
     }
 
     private async Task LoadSiteMaps(string url, CancellationToken cancellationToken)
@@ -126,7 +128,7 @@ public sealed class CrawlService : ICrawlService
             await LoadSiteMaps(_baseUri!.ToString(), cancellationToken);
         }
 
-        _pageHandler = new SeleniumPageHandler(session);
+        _pageHandler = new SeleniumPageHandler(session.Driver);
 
         _stopwatch.Start();
         var delay = _robotsService.CrawlDelay(_crawlSettings.UserAgent);
