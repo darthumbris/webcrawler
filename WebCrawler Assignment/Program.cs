@@ -21,8 +21,8 @@ builder.Services
         "MaxEdgeSessions must be greater than zero.")
     .Validate(settings => settings.PageLoadTimeOut > TimeSpan.Zero, "PageLoadTimeOut must be greater than zero.")
     .Validate(settings => settings.SessionTimeOut > TimeSpan.Zero, "SessionTimeOut must be greater than zero.")
-    .Validate(settings => string.IsNullOrEmpty(settings.HubUrl), "HubUrl can't be empty.")
-    .Validate(settings => string.IsNullOrEmpty(settings.UserAgent), "UserAgent can't be empty.")
+    .Validate(settings => !string.IsNullOrEmpty(settings.HubUrl), "HubUrl can't be empty.")
+    .Validate(settings => !string.IsNullOrEmpty(settings.UserAgent), "UserAgent can't be empty.")
     .ValidateOnStart();
 builder.Services.AddOptions<RequestOptions>()
     .Bind(builder.Configuration.GetSection("Requests"))
