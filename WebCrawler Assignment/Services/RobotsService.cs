@@ -170,7 +170,13 @@ public sealed class RobotsService
 
     public async Task LoadRobotTxt(string url, HttpClient httpClient, CancellationToken cancellationToken)
     {
-        var robotsUrl = new Uri("https://" + new Uri(url).Host + "/robots.txt");
+        var baseUri = new Uri(url);
+        var robotsUrl = new UriBuilder(baseUri)
+        {
+            Path = "/robots.txt",
+            Query = string.Empty,
+            Fragment = string.Empty,
+        }.Uri;
 
         using var response = await httpClient.GetAsync(robotsUrl, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -253,7 +259,7 @@ public sealed class RobotsService
                     var siteMap = SiteMap.FromLine(line);
                     if (siteMap.Url != null)
                     {
-                        SiteMaps.Add(SiteMap.FromLine(line));
+                        SiteMaps.Add(siteMap);
                     }
                     break;
                 case LineType.Comment:
