@@ -177,9 +177,14 @@ public sealed class CrawlService : ICrawlService
     //This is for the interal links
     private void AddLink(string url)
     {
-        var uri = StripFragmentUri(new Uri(url));
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            Log.Information("Skipping invalid discovered url: {Url}", url);
+            return;
+        }
+        uri = StripFragmentUri(uri);
         var visitedUrl = GetVisitKey(uri);
-        if (string.IsNullOrEmpty(visitedUrl) || _visited.ContainsKey(visitedUrl))
+        if (_visited.ContainsKey(visitedUrl))
         {
             return;
         }
