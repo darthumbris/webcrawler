@@ -15,11 +15,24 @@ public class RequestProcessor
     private readonly string javascriptGetterScript;
     public int PendingRequests = 0;
 
+    private static string ReadEmbeddedScript(string fileName)
+    {
+        var resourceName = $"WebCrawler.Scripts.{fileName}";
+        var assembly = typeof(RequestProcessor).Assembly;
+
+        using var stream = assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded script resource was not found: {resourceName}");
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     public RequestProcessor(IOptions<RequestOptions> requestOptions)
     {
         RequestOptions = requestOptions.Value;
-        cssGetterScript = File.ReadAllText("./Scripts/get_all_css.js");
-        javascriptGetterScript = File.ReadAllText("./Scripts/get_all_javascript.js");
+        cssGetterScript = ReadEmbeddedScript("get_all_css.js");
+        javascriptGetterScript = ReadEmbeddedScript("get_all_javascript.js");
     }
 
     public void AddRequest(Uri uri)

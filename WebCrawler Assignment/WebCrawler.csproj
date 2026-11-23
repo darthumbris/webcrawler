@@ -7,9 +7,11 @@
     <RootNamespace>WebCrawler</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Include="Services\RobotsService.cs" />
-  </ItemGroup>
+	<ItemGroup>
+		<EmbeddedResource Include="Scripts\*.js">
+			<LogicalName>WebCrawler.Scripts.%(Filename)%(Extension)</LogicalName>
+		</EmbeddedResource>
+	</ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
