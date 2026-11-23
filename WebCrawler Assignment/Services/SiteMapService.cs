@@ -7,7 +7,7 @@ public sealed class SiteMapService(HttpClient httpClient)
     private readonly HttpClient _httpClient = httpClient;
     private static readonly SiteMapParser _siteMapParser = new();
 
-    private static IEnumerable<Uri> LoadSiteMaps(Uri baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
+    private static Uri[] LoadSiteMaps(Uri baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -28,26 +28,79 @@ public sealed class SiteMapService(HttpClient httpClient)
         return allowedSitemaps;
     }
 
+    private async Task<HttpResponseMessage?> GetSitemapResponseAsync(Uri sitemapUrl, Uri baseUri, CancellationToken cancellationToken)
+    {
+        const int maxRedirects = 5;
+
+        var currentUrl = sitemapUrl;
+
+        for (var redirectCount = 0; redirectCount <= maxRedirects; redirectCount++)
+        {
+            if (!IsAllowedSitemap(currentUrl, baseUri))
+            {
+                Log.Warning("Skipping sitemap redirect outside allowed host: {Url}", currentUrl);
+                return null;
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, currentUrl);
+            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if ((int)response.StatusCode is < 300 or >= 400)
+            {
+                return response;
+            }
+
+            var location = response.Headers.Location;
+            response.Dispose();
+
+            if (location is null)
+            {
+                Log.Warning("sitemap redirect had no location: {Url}", currentUrl);
+                return null;
+            }
+
+            if (!Uri.TryCreate(currentUrl, location, out var nextUrl))
+            {
+                Log.Warning("Sitemap returned an invalid redirect location: {Location}", location);
+                return null;
+            }
+
+            Log.Information("Following sitemap redirect from {SourceUrl} to {DestinationUrl}.",
+                currentUrl, nextUrl);
+            currentUrl = nextUrl;
+        }
+
+        Log.Warning("Sitemap exceeded the maximum amount of redirects {Url}", sitemapUrl);
+        return null;
+    }
+
     private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase);
 
-    private async Task<FetchedSiteMap> FetchSiteMapAsync(Uri siteMapUrl, CancellationToken cancellationToken)
+    private async Task<FetchedSiteMap?> FetchSiteMapAsync(Uri sitemapUrl, Uri baseUri, CancellationToken cancellationToken)
     {
         try
         {
-            using var resp = await _httpClient.GetAsync(siteMapUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            using var resp = await GetSitemapResponseAsync(sitemapUrl, baseUri, cancellationToken);
+
+            if (resp is null)
+            {
+                return null;
+            }
 
             if (!resp.IsSuccessStatusCode)
             {
-                Log.Information("Sitemap response was not successful {Response} skipping {Url}.", resp.StatusCode, siteMapUrl);
-                return new FetchedSiteMap([], [], siteMapUrl);
+                Log.Information("Sitemap response was not successful {Response} skipping {Url}.", resp.StatusCode, sitemapUrl);
+                return null;
             }
             var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
 
             if (!CheckSiteMapContentType(contentType))
             {
-                Log.Information("Sitemap of contenttype {Type} is not yet supported for {Url}", contentType, siteMapUrl);
-                return new FetchedSiteMap([], [], siteMapUrl);
+                Log.Information("Sitemap of contenttype {Type} is not yet supported for {Url}", contentType, sitemapUrl);
+                return null;
             }
+
+            var finalUrl = resp.RequestMessage?.RequestUri ?? sitemapUrl;
 
             //TODO maybe need to handle compressed sitemaps?
             using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
@@ -56,11 +109,11 @@ public sealed class SiteMapService(HttpClient httpClient)
             using var reader = new StreamReader(stream);
             if (contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase))
             {
-                return await _siteMapParser.ParsePlainTxtSiteMapAsync(siteMapUrl, reader, cancellationToken);
+                return await _siteMapParser.ParsePlainTxtSiteMapAsync(finalUrl, reader, cancellationToken);
             }
             else
             {
-                return await _siteMapParser.ParseXmlSiteMapAsync(siteMapUrl, reader, cancellationToken);
+                return await _siteMapParser.ParseXmlSiteMapAsync(finalUrl, reader, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -70,8 +123,8 @@ public sealed class SiteMapService(HttpClient httpClient)
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Failed to load sitemap from {Url}", siteMapUrl);
-            return new FetchedSiteMap([], [], siteMapUrl);
+            Log.Warning(ex, "Failed to load sitemap from {Url}", sitemapUrl);
+            return null;
         }
     }
 
@@ -108,7 +161,12 @@ public sealed class SiteMapService(HttpClient httpClient)
                 continue;
             }
 
-            var sitemapFile = await FetchSiteMapAsync(url, cancellationToken);
+            var sitemapFile = await FetchSiteMapAsync(url, baseUri, cancellationToken);
+
+            if (sitemapFile is null)
+            {
+                continue;
+            }
 
             fetchedSiteMaps.Add(url, sitemapFile);
 

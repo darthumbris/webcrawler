@@ -41,7 +41,8 @@ public sealed class CrawlService : ICrawlService
     public CrawlService(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options, IOptions<RequestOptions> requestOptions)
     {
         _httpClient = httpClientFactory.CreateClient("Crawler");
-        _siteMapService = new SiteMapService(_httpClient);
+        var sitemapClient = httpClientFactory.CreateClient("Sitemap");
+        _siteMapService = new SiteMapService(sitemapClient);
         _crawlSettings = options.Value;
         _requestProcessor = new(requestOptions);
     }
