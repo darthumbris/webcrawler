@@ -174,7 +174,7 @@ public sealed class CrawlService : ICrawlService
         return result;
     }
 
-    //This is for the interal links
+    //This is for the internal links
     private void AddLink(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -228,7 +228,7 @@ public sealed class CrawlService : ICrawlService
         return url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps;
     }
 
-    public bool AddRequest(Uri url)
+    public bool AddRequest(Uri url, bool isRetrying = false)
     {
         url = StripFragmentUri(url);
 
@@ -255,21 +255,22 @@ public sealed class CrawlService : ICrawlService
 
         bool notYetVisited = _visited.TryAdd(GetVisitKey(url), 0);
 
-        if (notYetVisited && _robotsService.IsAllowed(url.LocalPath, _crawlSettings.UserAgent))
+        if (!isRetrying && !notYetVisited)
+        {
+            Log.Information("Request for {Url} was already handled. Will not add again.", url);
+            return false;
+        }
+        if (_robotsService.IsAllowed(url.LocalPath, _crawlSettings.UserAgent))
         {
             Log.Information("Added {Url} to request queue", url);
             _requestProcessor.AddRequest(url);
             return true;
         }
-        else if (notYetVisited)
-        {
-            Log.Information("Request for {Url} is disallowed by robots.txt file", url);
-        }
         else
         {
-            Log.Information("Request for {Url} was already handled. Will not add again.", url);
+            Log.Information("Request for {Url} is disallowed by robots.txt file", url);
+            return false;
         }
-        return false;
     }
 
     public void AddResult(ExtractedPage page)
@@ -325,7 +326,7 @@ public sealed class CrawlService : ICrawlService
                 //retry the request if failed
                 if (processResult.Exception != null)
                 {
-                    if (crawlState.Requests.Count <= _crawlSettings.MaxRequestRetries)
+                    if (crawlState.Requests.Count < _crawlSettings.MaxRequestRetries)
                     {
                         Log.Information("Request for {Url} got an exception. Will retry later.", processResult.Location);
                         crawlState.Requests.Add(new Request
@@ -333,7 +334,7 @@ public sealed class CrawlService : ICrawlService
                             StartTime = processResult.StartTime,
                             ElapsedTime = processResult.ElapsedTime,
                         });
-                        AddRequest(processResult.Location);
+                        AddRequest(processResult.Location, isRetrying: true);
                     }
                     else
                     {
