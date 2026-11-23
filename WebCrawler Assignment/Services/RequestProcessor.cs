@@ -9,11 +9,14 @@ namespace WebCrawler.Services;
 
 public class RequestProcessor
 {
-    private ConcurrentQueue<Uri> RequestQueue { get; } = new();
+    private ConcurrentQueue<Uri> _requestQueue { get; } = new();
     public readonly RequestOptions RequestOptions;
     private readonly string cssGetterScript;
     private readonly string javascriptGetterScript;
-    public int PendingRequests = 0;
+    private int _pendingRequests;
+
+    public int PendingRequests =>
+        Volatile.Read(ref _pendingRequests);
 
     private static string ReadEmbeddedScript(string fileName)
     {
@@ -37,8 +40,8 @@ public class RequestProcessor
 
     public void AddRequest(Uri uri)
     {
-        RequestQueue.Enqueue(uri);
-        PendingRequests++;
+        Interlocked.Increment(ref _pendingRequests);
+        _requestQueue.Enqueue(uri);
     }
 
     private async Task<ProcessResult> ProcessAsync(ProcessInfo info, SeleniumPageHandler pageHandler)
@@ -124,10 +127,10 @@ public class RequestProcessor
         var randomOffset = new Random();
         var requestsHandled = 0;
 
-        while (!RequestQueue.IsEmpty)
+        while (!_requestQueue.IsEmpty)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (RequestQueue.TryDequeue(out var url))
+            if (_requestQueue.TryDequeue(out var url))
             {
                 var requestDelay = Delay(crawlDelay, randomOffset);
                 var processInfo = new ProcessInfo
@@ -149,7 +152,7 @@ public class RequestProcessor
                 }
                 finally
                 {
-                    PendingRequests--;
+                    Interlocked.Decrement(ref _pendingRequests);
                 }
             }
         }
