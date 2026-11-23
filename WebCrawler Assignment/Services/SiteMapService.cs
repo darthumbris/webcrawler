@@ -13,17 +13,17 @@ public sealed class SiteMapService(HttpClient httpClient)
         var baseUri = new Uri(baseUrl);
         var defaultSitemapUrl = new Uri(baseUri, "/sitemap.xml");
 
-        var siteMapsUrls = new List<Uri>
+        var sitemapsUrls = new List<Uri>
         {
             defaultSitemapUrl
         };
 
-        siteMapsUrls.AddRange(robotSiteMaps.Select(s => s.Url).OfType<Uri>());
-        siteMapsUrls = [.. siteMapsUrls.Distinct()];
+        sitemapsUrls.AddRange(robotSiteMaps.Select(s => s.Url).OfType<Uri>());
+        sitemapsUrls = [.. sitemapsUrls.Distinct()];
 
         var loadedSiteMaps = new HashSet<Uri>();
 
-        foreach (var url in siteMapsUrls)
+        foreach (var url in sitemapsUrls)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
