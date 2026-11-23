@@ -13,9 +13,10 @@ public class SiteMapParser
         foreach (var el in node.Elements())
         {
             var name = el.Name.LocalName;
-            if (name.Equals("loc", StringComparison.InvariantCultureIgnoreCase))
+            if (name.Equals("loc", StringComparison.OrdinalIgnoreCase))
             {
-                if (Uri.TryCreate(el.Value, UriKind.Absolute, out var parsedUrl))
+                var value = el.Value.Trim().TrimStart('\uFEFF');
+                if (Uri.TryCreate(value, UriKind.Absolute, out var parsedUrl))
                 {
                     location = parsedUrl;
                 }
@@ -50,7 +51,7 @@ public class SiteMapParser
         foreach (var node in document.Elements())
         {
             var name = node.Name.LocalName;
-            if (name.Equals("urlset", StringComparison.InvariantCultureIgnoreCase))
+            if (name.Equals("urlset", StringComparison.OrdinalIgnoreCase))
             {
                 var links = new HashSet<Uri>();
 
@@ -65,7 +66,7 @@ public class SiteMapParser
 
                 fetchedSiteMap = fetchedSiteMap with { Links = links };
             }
-            if (name.Equals("sitemapindex", StringComparison.InvariantCultureIgnoreCase))
+            if (name.Equals("sitemapindex", StringComparison.OrdinalIgnoreCase))
             {
                 var sitemapIndices = new HashSet<Uri>();
 
@@ -92,8 +93,9 @@ public class SiteMapParser
 
         while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
+            var value = line.Trim().TrimStart('\uFEFF');
             cancellationToken.ThrowIfCancellationRequested();
-            if (Uri.TryCreate(line, UriKind.Absolute, out var parsedUrl))
+            if (Uri.TryCreate(value, UriKind.Absolute, out var parsedUrl))
             {
                 links.Add(parsedUrl);
             }
