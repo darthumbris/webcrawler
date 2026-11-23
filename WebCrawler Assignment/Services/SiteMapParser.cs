@@ -15,7 +15,7 @@ public class SiteMapParser
             var name = el.Name.LocalName;
             if (name.Equals("loc", StringComparison.OrdinalIgnoreCase))
             {
-                var value = el.Value.Trim().TrimStart('\uFEFF');
+                var value = el.Value.TrimStart('\uFEFF').Trim();
                 if (Uri.TryCreate(value, UriKind.Absolute, out var parsedUrl))
                 {
                     location = parsedUrl;
@@ -44,7 +44,7 @@ public class SiteMapParser
         }
         catch (XmlException)
         {
-            Log.Warning("Failed to parse sitemap XML.");
+            Log.Warning("Failed to parse sitemap XML from {Url}.", siteMapUrl);
             return fetchedSiteMap;
         }
 
@@ -93,7 +93,7 @@ public class SiteMapParser
 
         while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
-            var value = line.Trim().TrimStart('\uFEFF');
+            var value = line.TrimStart('\uFEFF').Trim();
             cancellationToken.ThrowIfCancellationRequested();
             if (Uri.TryCreate(value, UriKind.Absolute, out var parsedUrl))
             {
