@@ -1,72 +1,31 @@
 ﻿namespace WebCrawler.Services;
 
 using Serilog;
-using System.Net;
 
 public sealed class SiteMapService(HttpClient httpClient)
 {
     private readonly HttpClient _httpClient = httpClient;
     private static readonly SiteMapParser _siteMapParser = new();
 
-    private async Task<IEnumerable<Uri>> LoadSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
+    private static IEnumerable<Uri> LoadSiteMaps(Uri baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
-        var baseUri = new Uri(baseUrl);
-        var defaultSitemapUrl = new Uri(baseUri, "/sitemap.xml");
+        cancellationToken.ThrowIfCancellationRequested();
 
-        var sitemapsUrls = new List<Uri>
+        var sitemapsUrls = new HashSet<Uri>
         {
-            defaultSitemapUrl
+            new(baseUrl, "/sitemap.xml")
         };
 
-        sitemapsUrls.AddRange(robotSiteMaps.Select(s => s.Url).OfType<Uri>());
-        sitemapsUrls = [.. sitemapsUrls.Distinct()];
-
-        var loadedSiteMaps = new HashSet<Uri>();
-
-        foreach (var url in sitemapsUrls)
+        foreach (var sitemap in robotSiteMaps)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!IsAllowedSitemap(url, baseUri))
+            if (sitemap.Url is not null)
             {
-                Log.Warning("Skipping sitemap outside allowed host: {Url}", url);
-                continue;
-            }
-
-            try
-            {
-                using var sitemapRequest = new HttpRequestMessage(HttpMethod.Head, url);
-                using var sitemapResponse = await _httpClient.SendAsync(sitemapRequest, cancellationToken);
-
-                if (sitemapResponse.IsSuccessStatusCode)
-                {
-                    loadedSiteMaps.Add(url);
-                    continue;
-                }
-
-                //check for too many requests etc
-                if ((int)sitemapResponse.StatusCode >= 400 && (int)sitemapResponse.StatusCode < 500 && sitemapResponse.StatusCode != HttpStatusCode.NotFound)
-                {
-                    using var sitemapRequestRetry = new HttpRequestMessage(HttpMethod.Get, url);
-                    using var sitemapResponseRetry = await _httpClient.SendAsync(sitemapRequestRetry, cancellationToken);
-
-                    if (sitemapResponseRetry.IsSuccessStatusCode)
-                    {
-                        loadedSiteMaps.Add(url);
-                    }
-                }
-
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Failed to load sitemap from {Url}", url);
+                sitemapsUrls.Add(sitemap.Url);
             }
         }
-        return loadedSiteMaps;
+
+        var allowedSitemaps = sitemapsUrls.Where(url => IsAllowedSitemap(url, baseUrl)).ToArray();
+        return allowedSitemaps;
     }
 
     private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase);
@@ -75,33 +34,34 @@ public sealed class SiteMapService(HttpClient httpClient)
     {
         try
         {
-            using var resp = await _httpClient.GetAsync(siteMapUrl, cancellationToken);
+            using var resp = await _httpClient.GetAsync(siteMapUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            if (resp.IsSuccessStatusCode)
+            if (!resp.IsSuccessStatusCode)
             {
-                var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
-
-                //TODO maybe need to handle compressed sitemaps?
-                if (CheckSiteMapContentType(contentType))
-                {
-                    using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    var siteMapStream = stream;
-
-                    using var reader = new StreamReader(siteMapStream);
-                    if (contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return await _siteMapParser.ParsePlainTxtSiteMapAsync(siteMapUrl, reader, cancellationToken);
-                    }
-                    else
-                    {
-                        return await _siteMapParser.ParseXmlSiteMapAsync(siteMapUrl, reader, cancellationToken);
-                    }
-                }
+                Log.Information("Sitemap response was not successful {Response} skipping {Url}.", resp.StatusCode, siteMapUrl);
+                return new FetchedSiteMap([], [], siteMapUrl);
             }
-            Log.Information("Sitemap response was not successful {Response} skipping {Url}.", resp.StatusCode, siteMapUrl);
-            return new FetchedSiteMap([], [], siteMapUrl);
+            var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
+
+            if (!CheckSiteMapContentType(contentType))
+            {
+                Log.Information("Sitemap of contenttype {Type} is not yet supported for {Url}", contentType, siteMapUrl);
+                return new FetchedSiteMap([], [], siteMapUrl);
+            }
+
+            //TODO maybe need to handle compressed sitemaps?
+            using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var reader = new StreamReader(stream);
+            if (contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase))
+            {
+                return await _siteMapParser.ParsePlainTxtSiteMapAsync(siteMapUrl, reader, cancellationToken);
+            }
+            else
+            {
+                return await _siteMapParser.ParseXmlSiteMapAsync(siteMapUrl, reader, cancellationToken);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -115,7 +75,6 @@ public sealed class SiteMapService(HttpClient httpClient)
         }
     }
 
-    //TODO maybe should allow sitemap outside domain?
     private static bool IsAllowedSitemap(Uri sitemapUrl, Uri baseUrl)
     {
         return (sitemapUrl.Scheme == Uri.UriSchemeHttp ||
@@ -131,8 +90,8 @@ public sealed class SiteMapService(HttpClient httpClient)
 
         var baseUri = new Uri(baseUrl);
         var fetchedSiteMaps = new Dictionary<Uri, FetchedSiteMap>();
-        var sitemapUrls = new Stack<Uri>(await LoadSiteMapsAsync(baseUrl, robotSiteMaps, cancellationToken));
-        //TODO maybe add the stupid HashSet discoveredSitemapUrls
+        var discoveredSitemapUrls = new HashSet<Uri>(LoadSiteMaps(baseUri, robotSiteMaps, cancellationToken));
+        var sitemapUrls = new Stack<Uri>(discoveredSitemapUrls);
 
         while (sitemapUrls.Count > 0)
         {
@@ -156,7 +115,7 @@ public sealed class SiteMapService(HttpClient httpClient)
             foreach (var siteMapIndexUrl in sitemapFile.SiteMaps)
             {
                 if (IsAllowedSitemap(siteMapIndexUrl, baseUri) &&
-                    !fetchedSiteMaps.ContainsKey(siteMapIndexUrl))
+                    discoveredSitemapUrls.Add(siteMapIndexUrl))
                 {
                     sitemapUrls.Push(siteMapIndexUrl);
                 }
