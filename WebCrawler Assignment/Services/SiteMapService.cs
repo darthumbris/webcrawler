@@ -24,7 +24,7 @@ public sealed class SiteMapService(HttpClient httpClient)
             }
         }
 
-        var allowedSitemaps = sitemapsUrls.Where(url => IsAllowedSitemap(url, baseUrl)).ToArray();
+        var allowedSitemaps = sitemapsUrls.Where(url => CrawlUrlPolicy.IsCrawlable(url, baseUrl)).ToArray();
         return allowedSitemaps;
     }
 
@@ -36,7 +36,7 @@ public sealed class SiteMapService(HttpClient httpClient)
 
         for (var redirectCount = 0; redirectCount <= maxRedirects; redirectCount++)
         {
-            if (!IsAllowedSitemap(currentUrl, baseUri))
+            if (!CrawlUrlPolicy.IsCrawlable(currentUrl, baseUri))
             {
                 Log.Warning("Skipping sitemap redirect outside allowed host: {Url}", currentUrl);
                 return null;
@@ -128,15 +128,6 @@ public sealed class SiteMapService(HttpClient httpClient)
         }
     }
 
-    private static bool IsAllowedSitemap(Uri sitemapUrl, Uri baseUrl)
-    {
-        return (sitemapUrl.Scheme == Uri.UriSchemeHttp ||
-            sitemapUrl.Scheme == Uri.UriSchemeHttps) &&
-           sitemapUrl.Host.Equals(
-               baseUrl.Host,
-               StringComparison.OrdinalIgnoreCase);
-    }
-
     public async Task<IEnumerable<FetchedSiteMap>> FetchSiteMapsAsync(string baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
         Log.Information("Loading sitemap from: {Url}", baseUrl);
@@ -155,7 +146,7 @@ public sealed class SiteMapService(HttpClient httpClient)
                 continue;
             }
 
-            if (!IsAllowedSitemap(url, baseUri))
+            if (!CrawlUrlPolicy.IsCrawlable(baseUri, url))
             {
                 Log.Warning("Skipping sitemap outside allowed host: {Url}", url);
                 continue;
@@ -172,7 +163,7 @@ public sealed class SiteMapService(HttpClient httpClient)
 
             foreach (var siteMapIndexUrl in sitemapFile.SiteMaps)
             {
-                if (IsAllowedSitemap(siteMapIndexUrl, baseUri) &&
+                if (CrawlUrlPolicy.IsCrawlable(baseUri, siteMapIndexUrl) &&
                     discoveredSitemapUrls.Add(siteMapIndexUrl))
                 {
                     sitemapUrls.Push(siteMapIndexUrl);

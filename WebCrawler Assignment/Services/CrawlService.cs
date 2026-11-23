@@ -209,37 +209,17 @@ public sealed class CrawlService : ICrawlService
         }.Uri;
     }
 
-    //This makes sure that only baseHost with subdomain www or www2 is allowed
-    private bool IsSameAsBaseHost(Uri url)
-    {
-        static string NormalizeHost(string host)
-        {
-            return host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
-            ? host[4..] :
-            host.StartsWith("www2.", StringComparison.OrdinalIgnoreCase) ?
-            host[5..]
-            : host;
-        }
-
-        return string.Equals(NormalizeHost(url.Host), NormalizeHost(_baseUri!.Host), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsHttpScheme(Uri url)
-    {
-        return url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps;
-    }
-
     public bool AddRequest(Uri url, bool isRetrying = false)
     {
         url = StripFragmentUri(url);
 
-        if (!IsHttpScheme(url))
+        if (!CrawlUrlPolicy.IsHttp(url))
         {
             Log.Information("Request for {Url} was not to http or https skipping request.", url);
             return false;
         }
 
-        if (!IsSameAsBaseHost(url))
+        if (!CrawlUrlPolicy.IsSameHost(_baseUri!, url))
         {
             Log.Information("Request for host {UrlHost} is not the same as base host {BaseUrlHost} skipping request to url {Url}", url.Host, _baseUri!.Host, url);
             return false;

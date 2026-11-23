@@ -35,11 +35,11 @@ public class HtmlExtractor : IHTMLExtractor
                 {
                     if (resultUri == null)
                         continue;
-                    if (resultUri.Host == baseUri.Host)
+                    if (CrawlUrlPolicy.IsCrawlable(baseUri, resultUri))
                     {
                         internalLinks.Add(resultUri.ToString());
                     }
-                    else
+                    else if (CrawlUrlPolicy.IsHttp(resultUri))
                     {
                         externalLinks.Add(resultUri.ToString());
                     }
@@ -69,7 +69,7 @@ public class HtmlExtractor : IHTMLExtractor
                 {
                     if (resultUri == null)
                         continue;
-                    if (resultUri.Host == baseUri.Host)
+                    if (CrawlUrlPolicy.IsCrawlable(baseUri, resultUri))
                     {
                         internalLinks.Add(resultUri.ToString());
                     }
