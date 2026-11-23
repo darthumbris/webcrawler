@@ -326,6 +326,26 @@ public sealed class RobotsService
         return robotHeader;
     }
 
+    private static bool MatchesUserAgent(string ruleUserAgent, string actualUserAgent)
+    {
+        ruleUserAgent = ruleUserAgent.Trim();
+        actualUserAgent = actualUserAgent.Trim();
+
+        if (ruleUserAgent == "*")
+        {
+            return true;
+        }
+
+        var productToken = actualUserAgent
+            .Split(['/', ' ', '\t'], 2, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+
+        return string.Equals(
+            ruleUserAgent,
+            productToken,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public bool IsAllowed(
         string url,
         string userAgent)
@@ -338,7 +358,7 @@ public sealed class RobotsService
         url = FixUrl(url);
 
         var specificMatches = _specificRules
-            .Where(x => x.UserAgents.Any(ua => userAgent.Equals(ua, StringComparison.InvariantCultureIgnoreCase)))
+            .Where(x => x.UserAgents.Any(ua => MatchesUserAgent(ua, userAgent)))
             .ToList();
         //use speccific rules if they exist, otherwise use global rules
         var relevantRules = specificMatches.Count > 0
@@ -437,7 +457,7 @@ public sealed class RobotsService
             .ToList();
 
         var specificDelays = _crawlDelayRules
-            .Where(x => x.UserAgents.Any(ua => userAgent.Equals(ua, StringComparison.InvariantCultureIgnoreCase)))
+            .Where(x => x.UserAgents.Any(ua => MatchesUserAgent(ua, userAgent)))
             .ToList();
 
         if (globalDelays.Count == 0 && specificDelays.Count == 0)
