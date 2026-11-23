@@ -178,8 +178,8 @@ public sealed class CrawlService : ICrawlService
     private void AddLink(string url)
     {
         var uri = StripFragmentUri(new Uri(url));
-        var visitedUrl = StripPrefix(uri);
-        if (visitedUrl == null || _visited.ContainsKey(visitedUrl))
+        var visitedUrl = GetVisitKey(uri);
+        if (string.IsNullOrEmpty(visitedUrl) || _visited.ContainsKey(visitedUrl))
         {
             return;
         }
@@ -187,17 +187,12 @@ public sealed class CrawlService : ICrawlService
         AddRequest(uri);
     }
 
-    private static string StripPrefix(Uri url)
+    private static string GetVisitKey(Uri url)
     {
-        var stripped = url.ToString();
-        if (url.Scheme == Uri.UriSchemeHttp)
-        {
-            return stripped.TrimStart("http://").ToString();
-        }
-        else
-        {
-            return stripped.TrimStart("https://").ToString();
-        }
+        var authority = url.IsDefaultPort
+        ? url.Host
+        : $"{url.Host}:{url.Port}";
+        return $"{authority}{url.AbsolutePath}{url.Query}";
     }
 
     private static Uri StripFragmentUri(Uri url)
@@ -211,12 +206,32 @@ public sealed class CrawlService : ICrawlService
     //This makes sure that only baseHost with subdomain www or www2 is allowed
     private bool IsSameAsBaseHost(Uri url)
     {
-        return url.Host == _baseUri!.Host || url.Host.TrimStart("www.").ToString() == _baseUri!.Host.TrimStart("www.").ToString() || _baseUri!.Host.TrimStart("www2.").ToString() == url.Host.TrimStart("www2.").ToString();
+        static string NormalizeHost(string host)
+        {
+            return host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)
+            ? host[4..] :
+            host.StartsWith("www2.", StringComparison.OrdinalIgnoreCase) ?
+            host[5..]
+            : host;
+        }
+
+        return string.Equals(NormalizeHost(url.Host), NormalizeHost(_baseUri!.Host), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHttpScheme(Uri url)
+    {
+        return url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps;
     }
 
     public bool AddRequest(Uri url)
     {
         url = StripFragmentUri(url);
+
+        if (!IsHttpScheme(url))
+        {
+            Log.Information("Request for {Url} was not to http or https skipping request.", url);
+            return false;
+        }
 
         if (!IsSameAsBaseHost(url))
         {
@@ -233,7 +248,7 @@ public sealed class CrawlService : ICrawlService
             }
         }
 
-        bool notYetVisited = _visited.TryAdd(StripPrefix(url), 0);
+        bool notYetVisited = _visited.TryAdd(GetVisitKey(url), 0);
 
         if (notYetVisited && _robotsService.IsAllowed(url.LocalPath, _crawlSettings.UserAgent))
         {
