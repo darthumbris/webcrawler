@@ -94,7 +94,7 @@ app.MapPost("/company", async (
     }
     finally
     {
-        if (cancellationToken.IsCancellationRequested)
+        if (cancellationToken.IsCancellationRequested || session?.DriverInvalidated == true)
         {
             sessions.AbortRequest(request.Uuid);
         }
@@ -150,7 +150,7 @@ app.MapPost("/crawl", async (
     }
     finally
     {
-        if (cancellationToken.IsCancellationRequested)
+        if (cancellationToken.IsCancellationRequested || session?.DriverInvalidated == true)
         {
             sessions.AbortRequest(request.Uuid);
         }

@@ -1,6 +1,5 @@
 ﻿namespace WebCrawler.Models;
 
-public sealed class SeleniumAbortedException : Exception
+public sealed class SeleniumAbortedException(string message, Exception? inner = null) : Exception(message, inner)
 {
-    public SeleniumAbortedException(string message, Exception? inner = null) : base(message, inner) { }
 }

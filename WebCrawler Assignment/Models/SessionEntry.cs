@@ -11,4 +11,6 @@ public sealed class SessionEntry(BrowserType browserType, IWebDriver driver)
     public DateTimeOffset LastActivity { get; internal set; } = DateTimeOffset.UtcNow;
 
     public bool RequestOnGoing { get; internal set; }
+
+    public bool DriverInvalidated { get; internal set; }
 }

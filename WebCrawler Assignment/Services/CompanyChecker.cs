@@ -1,5 +1,6 @@
 ﻿using HtmlAgilityPack;
 using Microsoft.Extensions.Options;
+using OpenQA.Selenium;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
@@ -69,6 +70,7 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
         }
         catch (SeleniumAbortedException ex)
         {
+            session.DriverInvalidated = true;
             Log.Warning(ex, "The selenium driver was aborted while crawling {Url}", domainUrl);
             throw;
         }

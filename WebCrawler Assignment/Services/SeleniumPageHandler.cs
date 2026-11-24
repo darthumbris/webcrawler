@@ -40,10 +40,9 @@ public sealed class SeleniumPageHandler(IWebDriver driver, RequestOptions option
 
     public async Task<string> FetchPageAsync(string url, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await _driver.Navigate().GoToUrlAsync(url).WaitAsync(cancellationToken);
             await ScrollPage(cancellationToken);
 
@@ -55,6 +54,17 @@ public sealed class SeleniumPageHandler(IWebDriver driver, RequestOptions option
             }
             return _driver.PageSource;
         }
+        catch (WebDriverException ex)
+        {
+            Log.Warning(
+                ex,
+                "Selenium driver failed while loading {Url}.",
+                url);
+
+            throw new SeleniumAbortedException(
+                $"Selenium driver failed while loading {url}.",
+                ex);
+        }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
             Log.Information("Selenium navigation cancelled for {Url}", url);
@@ -62,15 +72,24 @@ public sealed class SeleniumPageHandler(IWebDriver driver, RequestOptions option
         }
     }
 
-    public async Task<string> ExecuteJavascriptAsync(string javascript, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return (string?)_executor.ExecuteAsyncScript(javascript) ?? string.Empty;
-    }
-
     public async Task<string> ExecuteJavascript(string javascript, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        return (string?)_executor.ExecuteScript(javascript) ?? string.Empty;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = (string?)_executor.ExecuteScript(javascript) ?? string.Empty;
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return result;
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new SeleniumAbortedException("Selenium javascript execution was cancelled.", ex);
+        }
+        catch (WebDriverException ex)
+        {
+            throw new SeleniumAbortedException("Selenium javascript execution failed because of driver failure.", ex);
+        }
     }
 }

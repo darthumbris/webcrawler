@@ -178,6 +178,7 @@ public sealed class CrawlService : ICrawlService
         }
         catch (SeleniumAbortedException ex)
         {
+            session.DriverInvalidated = true;
             Log.Warning(ex, "The selenium driver was aborted while crawling {Url}", url);
             throw;
         }

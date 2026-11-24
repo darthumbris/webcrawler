@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Options;
+using OpenQA.Selenium;
 using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -9,7 +10,7 @@ namespace WebCrawler.Services;
 
 public class RequestProcessor
 {
-    private ConcurrentQueue<Uri> _requestQueue { get; } = new();
+    private readonly ConcurrentQueue<Uri> _requestQueue = new();
     public readonly RequestOptions RequestOptions;
     private readonly string cssGetterScript;
     private readonly string javascriptGetterScript;
@@ -52,23 +53,20 @@ public class RequestProcessor
             await Task.Delay(((int)info.Delay), info.Cancellation);
         }
 
-        var startTime = DateTime.Now;
+        var startTime = DateTime.UtcNow;
         info.Timer.Start();
+        using var timeout = new CancellationTokenSource(RequestOptions.RequestTimeOut);
+        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout.Token);
+        var cancel = linkedSource.Token;
 
         try
         {
-            using var timeout = new CancellationTokenSource(RequestOptions.RequestTimeOut);
-            using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(info.Cancellation, timeout.Token);
-            var cancel = linkedSource.Token;
-
             var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
-
             var extractedText = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancel);
             var extractedCss = await pageHandler.ExecuteJavascript(cssGetterScript, cancel);
             var extractedJavascript = await pageHandler.ExecuteJavascript(javascriptGetterScript, cancel);
 
             info.Timer.Stop();
-
             info.Cancellation.ThrowIfCancellationRequested();
 
             Log.Information("Request for {Url} completed in {Time}ms", info.Location, info.Timer.ElapsedMilliseconds);
@@ -88,11 +86,19 @@ public class RequestProcessor
         catch (OperationCanceledException) when (info.Cancellation.IsCancellationRequested)
         {
             info.Timer.Stop();
-            Log.Warning("Request {Url} cancelled elapsed: {Elapsed}ms", info.Location, info.Timer.Elapsed.TotalMilliseconds);
+            Log.Warning("The entire crawl was cancelled for {Url}", info.Location);
             throw;
+        }
+        catch (OperationCanceledException ex) when (timeout.IsCancellationRequested)
+        {
+            info.Timer.Stop();
+            Log.Warning("The request timeout expired for {Url}", info.Location);
+            throw new SeleniumAbortedException(
+                $"The page request timed out for {info.Location}.", ex);
         }
         catch (SeleniumAbortedException)
         {
+            info.Timer.Stop();
             throw;
         }
         catch (Exception ex)
