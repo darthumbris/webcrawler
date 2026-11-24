@@ -1,6 +1,7 @@
 ﻿namespace WebCrawler.Services;
 
 using OpenQA.Selenium;
+using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 
@@ -40,17 +41,25 @@ public sealed class SeleniumPageHandler(IWebDriver driver, RequestOptions option
     public async Task<string> FetchPageAsync(string url, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        await _driver.Navigate().GoToUrlAsync(url);
-        await ScrollPage(cancellationToken);
 
-        //really simple check for 429 Too many Requests
-        //because Selenium doesn't give response codes for some stupid reason....
-        if (_driver.PageSource.Contains("<h1>Too Many Requests</h1>"))
+        try
         {
-            throw new Exception("Too many request response detected");
-        }
+            await _driver.Navigate().GoToUrlAsync(url).WaitAsync(cancellationToken);
+            await ScrollPage(cancellationToken);
 
-        return _driver.PageSource;
+            //really simple check for 429 Too many Requests
+            //because Selenium doesn't give response codes for some stupid reason....
+            if (_driver.PageSource.Contains("<h1>Too Many Requests</h1>"))
+            {
+                throw new Exception("Too many request response detected");
+            }
+            return _driver.PageSource;
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            Log.Information("Selenium navigation cancelled for {Url}", url);
+            throw new SeleniumAbortedException($"Selenium driver was cancelled while loading {url}.", ex);
+        }
     }
 
     public async Task<string> ExecuteJavascriptAsync(string javascript, CancellationToken cancellationToken)

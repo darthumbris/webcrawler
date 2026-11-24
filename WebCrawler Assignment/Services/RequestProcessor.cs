@@ -91,6 +91,10 @@ public class RequestProcessor
             Log.Warning("Request {Url} cancelled elapsed: {Elapsed}ms", info.Location, info.Timer.Elapsed.TotalMilliseconds);
             throw;
         }
+        catch (SeleniumAbortedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             info.Timer.Stop();

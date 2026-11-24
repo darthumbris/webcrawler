@@ -133,46 +133,54 @@ public sealed class CrawlService : ICrawlService
 
         Log.Information("Crawl delay set to: {Delay}ms", delay.TotalMilliseconds);
 
-        var resultCrawl = await ProcessAsync(async (requestResult, crawlState) =>
+        try
         {
-            if (!string.IsNullOrEmpty(requestResult.HtmlContent))
+            var resultCrawl = await ProcessAsync(async (requestResult, crawlState) =>
             {
-                var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult);
-                AddResult(crawlState.Location, parsedContent);
-            }
-            else
+                if (!string.IsNullOrEmpty(requestResult.HtmlContent))
+                {
+                    var parsedContent = await _htmlExtractor.Extract(crawlState.Location, requestResult);
+                    AddResult(crawlState.Location, parsedContent);
+                }
+                else
+                {
+                    Log.Warning("Request for {Url} returned no content", crawlState.Location);
+                }
+            }, delay, cancellationToken);
+
+            _stopwatch.Stop();
+
+            Log.Information("Crawl completed for domain: {Url} in {Time} seconds with {Count} pages fetched", url, _stopwatch.Elapsed.TotalSeconds, _fetchedPages.Count);
+
+            long crawledHtmlTotalLen = 0;
+
+            foreach (var extractedPage in resultCrawl)
             {
-                Log.Warning("Request for {Url} returned no content", crawlState.Location);
+                crawledHtmlTotalLen += extractedPage.HtmlContent.Length;
+                _collectedHtml.Add(extractedPage.HtmlContent);
+                _collectedText.Add(extractedPage.Text);
+                _collectedCss.Add(extractedPage.CssContent);
+                _collectedJavascript.Add(extractedPage.JavascriptContent);
+                _collectedInternalLinks.AddRange(extractedPage.InternalLinks);
+                _collectedExternalLinks.AddRange(extractedPage.ExternalLinks);
             }
-        }, delay, cancellationToken);
 
-        _stopwatch.Stop();
-
-        Log.Information("Crawl completed for domain: {Url} in {Time} seconds with {Count} pages fetched", url, _stopwatch.Elapsed.TotalSeconds, _fetchedPages.Count);
-
-        long crawledHtmlTotalLen = 0;
-
-        foreach (var extractedPage in resultCrawl)
-        {
-            crawledHtmlTotalLen += extractedPage.HtmlContent.Length;
-            _collectedHtml.Add(extractedPage.HtmlContent);
-            _collectedText.Add(extractedPage.Text);
-            _collectedCss.Add(extractedPage.CssContent);
-            _collectedJavascript.Add(extractedPage.JavascriptContent);
-            _collectedInternalLinks.AddRange(extractedPage.InternalLinks);
-            _collectedExternalLinks.AddRange(extractedPage.ExternalLinks);
+            var result = new CrawlResult
+            (
+                _collectedHtml,
+                _collectedText,
+                _collectedCss,
+                _collectedJavascript,
+                _collectedInternalLinks,
+                _collectedExternalLinks
+            );
+            return result;
         }
-
-        var result = new CrawlResult
-        (
-            _collectedHtml,
-            _collectedText,
-            _collectedCss,
-            _collectedJavascript,
-            _collectedInternalLinks,
-            _collectedExternalLinks
-        );
-        return result;
+        catch (SeleniumAbortedException ex)
+        {
+            Log.Warning(ex, "The selenium driver was aborted while crawling {Url}", url);
+            throw;
+        }
     }
 
     //This is for the internal links

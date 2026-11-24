@@ -1,8 +1,8 @@
-﻿using OpenQA.Selenium;
+﻿using Microsoft.Extensions.Options;
+using OpenQA.Selenium;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
-using Microsoft.Extensions.Options;
 
 namespace WebCrawler.Services;
 
@@ -259,6 +259,28 @@ public class SeleniumSessionService(IOptions<CrawlerSettings> options) : IDispos
                 session.LastActivity = DateTimeOffset.UtcNow;
             }
         }
+    }
+
+    public void AbortRequest(string uuid)
+    {
+        if (!Guid.TryParse(uuid, out var uid)) //should not happen since request was started with same uuid
+        {
+            return;
+        }
+
+        SessionEntry? session;
+
+        lock (_sessionLock)
+        {
+            if (!_sessions.Remove(uid, out session))
+            {
+                return;
+            }
+
+            _activeSessions[session.BrowserType]--;
+        }
+
+        DisposeDriver(session.Driver);
     }
 
     public void Dispose()

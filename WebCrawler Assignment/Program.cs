@@ -94,7 +94,14 @@ app.MapPost("/company", async (
     }
     finally
     {
-        sessions.EndRequest(request.Uuid);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            sessions.AbortRequest(request.Uuid);
+        }
+        else
+        {
+            sessions.EndRequest(request.Uuid);
+        }
     }
 });
 
@@ -143,7 +150,14 @@ app.MapPost("/crawl", async (
     }
     finally
     {
-        sessions.EndRequest(request.Uuid);
+        if (cancellationToken.IsCancellationRequested)
+        {
+            sessions.AbortRequest(request.Uuid);
+        }
+        else
+        {
+            sessions.EndRequest(request.Uuid);
+        }
     }
 });
 

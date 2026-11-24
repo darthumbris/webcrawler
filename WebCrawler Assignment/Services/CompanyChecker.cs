@@ -67,6 +67,11 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
             Log.Information(oex, "Company check was cancelled");
             throw;
         }
+        catch (SeleniumAbortedException ex)
+        {
+            Log.Warning(ex, "The selenium driver was aborted while crawling {Url}", domainUrl);
+            throw;
+        }
         catch (Exception ex)
         {
             Log.Information(ex, "Failed to fetch page");
