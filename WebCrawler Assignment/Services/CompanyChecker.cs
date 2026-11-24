@@ -61,7 +61,7 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
         try
         {
             html = await pageHandler.FetchPageAsync(domainUrl, cancellationToken);
-            text = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancellationToken);
+            text = pageHandler.ExecuteJavascript("return document.body.innerText;", cancellationToken);
         }
         catch (OperationCanceledException oex)
         {

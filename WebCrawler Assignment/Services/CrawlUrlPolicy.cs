@@ -1,7 +1,5 @@
 ﻿namespace WebCrawler.Services;
 
-//TODO maybe implement this so that CrawlService, SitemapService, RobotsService, HtmlExtractor and maybe other stuff uses this
-//to check if it is ok
 public sealed class CrawlUrlPolicy
 {
     public static bool IsHttp(Uri uri)

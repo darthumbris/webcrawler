@@ -62,9 +62,9 @@ public class RequestProcessor
         try
         {
             var fetchedHtml = await pageHandler.FetchPageAsync(info.Location.ToString(), cancel);
-            var extractedText = await pageHandler.ExecuteJavascript("return document.body.innerText;", cancel);
-            var extractedCss = await pageHandler.ExecuteJavascript(cssGetterScript, cancel);
-            var extractedJavascript = await pageHandler.ExecuteJavascript(javascriptGetterScript, cancel);
+            var extractedText = pageHandler.ExecuteJavascript("return document.body.innerText;", cancel);
+            var extractedCss = pageHandler.ExecuteJavascript(cssGetterScript, cancel);
+            var extractedJavascript = pageHandler.ExecuteJavascript(javascriptGetterScript, cancel);
 
             info.Timer.Stop();
             info.Cancellation.ThrowIfCancellationRequested();

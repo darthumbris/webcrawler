@@ -72,7 +72,7 @@ public sealed class SeleniumPageHandler(IWebDriver driver, RequestOptions option
         }
     }
 
-    public async Task<string> ExecuteJavascript(string javascript, CancellationToken cancellationToken)
+    public string ExecuteJavascript(string javascript, CancellationToken cancellationToken)
     {
         try
         {

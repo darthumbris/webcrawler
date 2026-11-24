@@ -190,13 +190,11 @@ app.MapPost("/close", (SessionCloseRequest request, SeleniumSessionService sessi
 
 app.MapGet("/health", () =>
 {
-    //TODO Kan hier ook laten zien hoeveel open sessions?
     return Results.Ok(new
     {
         status = "healthy",
         service = "webcrawler",
         timestamp = DateTimeOffset.UtcNow,
-        //sessions = 
     });
 });
 
