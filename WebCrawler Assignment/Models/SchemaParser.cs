@@ -46,13 +46,15 @@ namespace WebCrawler.Models
                 ExtractEntities(graph, result);
             }
 
-            var type = GetString(el, "@type");
+            var types = NormalizeTypes(GetTypes(el));
 
-            if (IsCompanyType(type) || IsCompanyExclusion(type))
+            if (types.Any(StructuredCompanyData.IsCompanyType) ||
+                types.Any(StructuredCompanyData.IsMaybeCompanyType) ||
+                types.Any(StructuredCompanyData.IsNotCompanyType))
             {
                 result.Add(new StructuredCompanyData
                 {
-                    SchemaType = type,
+                    SchemaType = [.. types],
                     Name = GetString(el, "name"),
                     Url = GetString(el, "url"),
                     Email = GetString(el, "email"),
@@ -96,6 +98,49 @@ namespace WebCrawler.Models
                 : null;
         }
 
+        private static IEnumerable<string> NormalizeTypes(IEnumerable<string> types)
+        {
+            return types.SelectMany(type => type.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                .Select(type => type.Trim()).Where(type => !string.IsNullOrEmpty(type))
+                .Select(type => type.Split('/').Last());
+        }
+
+        private static IEnumerable<string> GetTypes(JsonElement element)
+        {
+            if (!element.TryGetProperty("@type", out var type))
+            {
+                yield break;
+            }
+
+            if (type.ValueKind == JsonValueKind.String)
+            {
+                var value = type.GetString();
+
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    yield return value;
+                }
+
+                yield break;
+            }
+
+            if (type.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in type.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var value = item.GetString();
+
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            yield return value;
+                        }
+                    }
+                }
+            }
+        }
+
         private static string? GetNestedString(JsonElement element, string parent, string child)
         {
             if (!element.TryGetProperty(parent, out var parentElement))
@@ -106,29 +151,5 @@ namespace WebCrawler.Models
 
             return GetString(parentElement, child);
         }
-
-        private static bool IsCompanyType(string? type)
-        {
-            if (type is null)
-                return false;
-
-            var types = type.Split(',');
-            return types.Any(type =>
-            {
-                type = type.Trim().Split('/').Last();
-                return StructuredCompanyData.IsCompanyType(type) || StructuredCompanyData.IsMaybeCompanyType(type);
-            });
-        }
-
-        //these types exclude it being a company
-        private static bool IsCompanyExclusion(string? type)
-        {
-            if (type is null)
-                return false;
-
-            var types = type.Split(',');
-            return types.Any(type => StructuredCompanyData.IsNotCompanyType(type.Trim().Split('/').Last()));
-        }
-
     }
 }

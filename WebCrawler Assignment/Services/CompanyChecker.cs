@@ -223,12 +223,12 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
 
         foreach (var schema in schemas)
         {
-            if (StructuredCompanyData.IsCompanyType(schema.SchemaType))
+            if (schema.SchemaType.Any(StructuredCompanyData.IsCompanyType))
             {
                 _score += 10;
                 schemaCompanyIndicators += 1;
             }
-            if (StructuredCompanyData.IsMaybeCompanyType(schema.SchemaType) && !organizationChecked)
+            if (schema.SchemaType.Any(StructuredCompanyData.IsMaybeCompanyType) && !organizationChecked)
             {
                 schemaCompanyIndicators += 1;
                 _score += 2;
@@ -240,7 +240,7 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
                 schemaCompanyIndicators += 1;
             }
 
-            if (StructuredCompanyData.IsNotCompanyType(schema.SchemaType) && !isNotCompanyChecked)
+            if (schema.SchemaType.Any(StructuredCompanyData.IsNotCompanyType) && !isNotCompanyChecked)
             {
                 _score -= 10;
                 schemaNonCompanyIndicators += 1;

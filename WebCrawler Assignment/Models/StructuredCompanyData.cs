@@ -10,7 +10,7 @@ public class StructuredCompanyData
 
     public string? Telephone { get; set; }
 
-    public string? SchemaType { get; set; }
+    public IReadOnlyCollection<string> SchemaType { get; set; } = [];
 
     public string? StreetAddress { get; set; }
 
