@@ -15,12 +15,10 @@ public class CompanyPriorityFilter
             var score = LinkScore(link.ToString());
             links.Add(link, score);
         }
-        Log.Information("links before filter and sort: {Count}", links.Count);
 
         var sortedLinks = links.OrderBy(x => x.Value).ToList();
         var filteredLinks = sortedLinks.Where(f => f.Value > 0);
         var selectedLinks = filteredLinks.Select(a => a.Key).ToList();
-        Log.Information("links after filter and sort: {Count}", selectedLinks.Count);
         return selectedLinks;
     }
 
@@ -33,12 +31,10 @@ public class CompanyPriorityFilter
             var score = LinkScore(link);
             links.Add(link, score);
         }
-        Log.Information("links before filter and sort: {Count}", links.Count);
 
         var sortedLinks = links.OrderBy(x => x.Value).ToList();
         var filteredLinks = sortedLinks.Where(f => f.Value > 0);
         var selectedLinks = filteredLinks.Select(a => a.Key).ToList();
-        Log.Information("links after filter and sort: {Count}", selectedLinks.Count);
         return selectedLinks;
     }
 
