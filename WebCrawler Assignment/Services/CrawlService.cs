@@ -42,7 +42,7 @@ public sealed class CrawlService : ICrawlService
     {
         _httpClient = httpClientFactory.CreateClient("Crawler");
         var sitemapClient = httpClientFactory.CreateClient("Sitemap");
-        _siteMapService = new SiteMapService(sitemapClient);
+        _siteMapService = new SiteMapService(sitemapClient, options);
         _crawlSettings = options.Value;
         _requestProcessor = new(requestOptions);
     }

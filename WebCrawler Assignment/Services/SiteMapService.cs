@@ -1,12 +1,16 @@
 ﻿namespace WebCrawler.Services;
 
+using Microsoft.Extensions.Options;
 using Serilog;
 using System.IO.Compression;
+using WebCrawler.Configuration;
 
-public sealed class SiteMapService(HttpClient httpClient)
+public sealed class SiteMapService(HttpClient httpClient, IOptions<CrawlerSettings> options)
 {
     private readonly HttpClient _httpClient = httpClient;
     private static readonly SiteMapParser _siteMapParser = new();
+    private readonly CrawlerSettings _settings = options.Value;
+    private static readonly int _maxSiteMaps = 500;
 
     private static Uri[] LoadSiteMaps(Uri baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
@@ -75,34 +79,32 @@ public sealed class SiteMapService(HttpClient httpClient)
         return null;
     }
 
-    private static bool IsCompressed(string contentType)
+    private static bool IsCompressed(Uri url, string contentType)
     {
-        return contentType.Equals("application/x-gzip", StringComparison.OrdinalIgnoreCase) ||
-        contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase);
+        return url.AbsolutePath.EndsWith(".gz", StringComparison.OrdinalIgnoreCase) ||
+            contentType.Equals("application/x-gzip", StringComparison.OrdinalIgnoreCase) ||
+            contentType.Equals("application/gzip", StringComparison.OrdinalIgnoreCase);
     }
     private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase);
 
     private static string GetContentTypeFromExtension(string extension)
     {
-        switch (extension.ToLower())
+        return extension.ToLowerInvariant() switch
         {
-            case ".txt":
-            case ".conf":
-            case ".def":
-            case ".in":
-            case ".ini":
-            case ".list":
-            case ".log":
-            case ".text":
-                return "text/plain";
-            case ".xml":
-            case ".rng":
-            case "xsd":
-            case "xsl":
-                return "application/xml";
-            default:
-                return "application/octet-stream";
+            ".txt" or ".conf" or ".def" or ".in" or ".ini" or ".list" or ".log" or ".text" => "text/plain",
+            ".xml" or ".rng" or ".xsd" or ".xsl" => "application/xml",
+            _ => "application/octet-stream",
+        };
+    }
+
+    private static string GetSitemapContentTypeFromPath(string path)
+    {
+        var extension = Path.GetExtension(path) ?? string.Empty;
+        if (path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase))
+        {
+            extension = Path.GetExtension(Path.GetFileNameWithoutExtension(path)) ?? string.Empty;
         }
+        return GetContentTypeFromExtension(extension);
     }
 
     private async Task<FetchedSiteMap?> FetchSiteMapAsync(Uri sitemapUrl, Uri baseUri, CancellationToken cancellationToken)
@@ -123,12 +125,12 @@ public sealed class SiteMapService(HttpClient httpClient)
             }
             var requiresDecompression = false;
             var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
+            var finalUrl = resp.RequestMessage?.RequestUri ?? sitemapUrl;
 
-            if (IsCompressed(contentType))
+            if (IsCompressed(finalUrl, contentType))
             {
                 requiresDecompression = true;
-                var extension = Path.GetExtension(sitemapUrl.AbsolutePath) ?? string.Empty;
-                contentType = GetContentTypeFromExtension(extension);
+                contentType = GetSitemapContentTypeFromPath(finalUrl.AbsolutePath);
             }
 
             if (!CheckSiteMapContentType(contentType))
@@ -137,7 +139,6 @@ public sealed class SiteMapService(HttpClient httpClient)
                 return null;
             }
 
-            var finalUrl = resp.RequestMessage?.RequestUri ?? sitemapUrl;
 
             using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -148,7 +149,8 @@ public sealed class SiteMapService(HttpClient httpClient)
                 contentStream = new GZipStream(contentStream, CompressionMode.Decompress);
             }
 
-            using var reader = new StreamReader(contentStream);
+            using var limitedStream = new LimitedReadStream(contentStream, _settings.MaxSitemapDecompressedBytes);
+            using var reader = new StreamReader(limitedStream);
             if (contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase))
             {
                 return await _siteMapParser.ParsePlainTxtSiteMapAsync(finalUrl, reader, cancellationToken);
@@ -162,6 +164,11 @@ public sealed class SiteMapService(HttpClient httpClient)
         {
             Log.Information("Request was cancelled stopping fetching sitemap");
             throw;
+        }
+        catch (InvalidDataException)
+        {
+            Log.Information("Sitemap {Url} exceeded size limit.", sitemapUrl);
+            return null;
         }
         catch (Exception ex)
         {
@@ -202,6 +209,11 @@ public sealed class SiteMapService(HttpClient httpClient)
             }
 
             fetchedSiteMaps.Add(url, sitemapFile);
+            if (fetchedSiteMaps.Count == _maxSiteMaps)
+            {
+                Log.Information("Sitemap limit reached");
+                break;
+            }
 
             foreach (var siteMapIndexUrl in sitemapFile.SiteMaps)
             {
@@ -211,6 +223,7 @@ public sealed class SiteMapService(HttpClient httpClient)
                     sitemapUrls.Push(siteMapIndexUrl);
                 }
             }
+
 
         }
 

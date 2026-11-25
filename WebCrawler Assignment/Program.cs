@@ -1,4 +1,5 @@
 using Serilog;
+using System.Net;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
 using WebCrawler.Services;
@@ -13,6 +14,8 @@ builder.Services
         "MaxPagesCompanyCheck must be greater than zero.")
     .Validate(settings => settings.MaxRequestRetries >= 0,
         "MaxRequestRetries cannot be negative.")
+    .Validate(settings => settings.MaxSitemapDecompressedBytes > 0,
+    "MaxSitemapDecompressedBytes must be greater than zero.")
     .Validate(settings => settings.MaxChromeSessions > 0,
         "MaxChromeSessions must be greater than zero.")
     .Validate(settings => settings.MaxFirefoxSessions > 0,
@@ -45,7 +48,11 @@ builder.Services.AddHttpClient("Sitemap", client =>
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:159.0) Gecko/20100101 Firefox/159.0");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
-    AllowAutoRedirect = false
+    AllowAutoRedirect = false,
+    AutomaticDecompression =
+        DecompressionMethods.GZip |
+        DecompressionMethods.Deflate |
+        DecompressionMethods.Brotli
 });
 
 Log.Logger = new LoggerConfiguration()

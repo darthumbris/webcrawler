@@ -6,6 +6,8 @@ namespace WebCrawler.Services;
 
 public class SiteMapParser
 {
+
+    private static readonly int _maxSiteMapLinks = 50000;
     private static bool ParseSiteMapUrl(XElement node, out Uri? url)
     {
         Uri? location = null;
@@ -62,6 +64,11 @@ public class SiteMapParser
                     {
                         links.Add(parsedUrl!);
                     }
+                    if (links.Count > _maxSiteMapLinks)
+                    {
+                        Log.Information("Sitemap link limit reached");
+                        break;
+                    }
                 }
 
                 fetchedSiteMap = fetchedSiteMap with { Links = links };
@@ -76,6 +83,11 @@ public class SiteMapParser
                     if (ParseSiteMapUrl(url, out var parsedIndexUrl))
                     {
                         sitemapIndices.Add(parsedIndexUrl!);
+                    }
+                    if (sitemapIndices.Count > _maxSiteMapLinks)
+                    {
+                        Log.Information("Sitemap index limit reached");
+                        break;
                     }
                 }
 
@@ -98,6 +110,11 @@ public class SiteMapParser
             if (Uri.TryCreate(value, UriKind.Absolute, out var parsedUrl))
             {
                 links.Add(parsedUrl);
+            }
+            if (links.Count > _maxSiteMapLinks)
+            {
+                Log.Information("Sitemap link limit reached");
+                break;
             }
         }
 
