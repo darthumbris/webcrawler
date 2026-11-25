@@ -179,7 +179,8 @@ public sealed class RobotsService
             var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             LoadTxt(fetchedRobotsTxt);
-        } else
+        }
+        else
         {
             Log.Information("Error in getting robots.txt for {Url} response code: {Code}. Assuming no pages are allowed.", robotsUrl, response.StatusCode);
             RobotFailure = true;
@@ -430,16 +431,7 @@ public sealed class RobotsService
         {
             return "/";
         }
-        if (!url.StartsWith('/'))
-        {
-            url = "/" + url;
-        }
-
-        while (url.Contains("//", StringComparison.Ordinal))
-        {
-            url = url.Replace("//", "/", StringComparison.Ordinal);
-        }
-        return url;
+        return url.StartsWith('/') ? url : "/" + url;
     }
 
     public TimeSpan CrawlDelay(string userAgent)
