@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Options;
-using OpenQA.Selenium;
 using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -8,16 +7,15 @@ using WebCrawler.Models;
 
 namespace WebCrawler.Services;
 
-public class RequestProcessor
+public class RequestProcessor(IOptions<RequestOptions> requestOptions)
 {
     private readonly ConcurrentQueue<Uri> _requestQueue = new();
-    public readonly RequestOptions RequestOptions;
-    private readonly string cssGetterScript;
-    private readonly string javascriptGetterScript;
+    public readonly RequestOptions RequestOptions = requestOptions.Value;
+    private readonly string cssGetterScript = ReadEmbeddedScript("get_all_css.js");
+    private readonly string javascriptGetterScript = ReadEmbeddedScript("get_all_javascript.js");
     private int _pendingRequests;
 
-    public int PendingRequests =>
-        Volatile.Read(ref _pendingRequests);
+    public int PendingRequests => Volatile.Read(ref _pendingRequests);
 
     private static string ReadEmbeddedScript(string fileName)
     {
@@ -30,13 +28,6 @@ public class RequestProcessor
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
-    }
-
-    public RequestProcessor(IOptions<RequestOptions> requestOptions)
-    {
-        RequestOptions = requestOptions.Value;
-        cssGetterScript = ReadEmbeddedScript("get_all_css.js");
-        javascriptGetterScript = ReadEmbeddedScript("get_all_javascript.js");
     }
 
     public void AddRequest(Uri uri)
