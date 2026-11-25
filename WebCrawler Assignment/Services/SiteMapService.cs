@@ -1,6 +1,7 @@
 ﻿namespace WebCrawler.Services;
 
 using Serilog;
+using System.IO.Compression;
 
 public sealed class SiteMapService(HttpClient httpClient)
 {
@@ -74,7 +75,35 @@ public sealed class SiteMapService(HttpClient httpClient)
         return null;
     }
 
+    private static bool IsCompressed(string contentType)
+    {
+        return contentType.Equals("application/x-gzip", StringComparison.OrdinalIgnoreCase) ||
+        contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase);
+    }
     private static bool CheckSiteMapContentType(string contentType) => contentType.Equals("text/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("application/xml", StringComparison.OrdinalIgnoreCase) || contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase);
+
+    private static string GetContentTypeFromExtension(string extension)
+    {
+        switch (extension.ToLower())
+        {
+            case ".txt":
+            case ".conf":
+            case ".def":
+            case ".in":
+            case ".ini":
+            case ".list":
+            case ".log":
+            case ".text":
+                return "text/plain";
+            case ".xml":
+            case ".rng":
+            case "xsd":
+            case "xsl":
+                return "application/xml";
+            default:
+                return "application/octet-stream";
+        }
+    }
 
     private async Task<FetchedSiteMap?> FetchSiteMapAsync(Uri sitemapUrl, Uri baseUri, CancellationToken cancellationToken)
     {
@@ -92,7 +121,15 @@ public sealed class SiteMapService(HttpClient httpClient)
                 Log.Information("Sitemap response was not successful {Response} skipping {Url}.", resp.StatusCode, sitemapUrl);
                 return null;
             }
+            var requiresDecompression = false;
             var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
+
+            if (IsCompressed(contentType))
+            {
+                requiresDecompression = true;
+                var extension = Path.GetExtension(sitemapUrl.AbsolutePath) ?? string.Empty;
+                contentType = GetContentTypeFromExtension(extension);
+            }
 
             if (!CheckSiteMapContentType(contentType))
             {
@@ -102,11 +139,16 @@ public sealed class SiteMapService(HttpClient httpClient)
 
             var finalUrl = resp.RequestMessage?.RequestUri ?? sitemapUrl;
 
-            //TODO maybe need to handle compressed sitemaps?
             using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var reader = new StreamReader(stream);
+            var contentStream = stream;
+            if (requiresDecompression)
+            {
+                contentStream = new GZipStream(contentStream, CompressionMode.Decompress);
+            }
+
+            using var reader = new StreamReader(contentStream);
             if (contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase))
             {
                 return await _siteMapParser.ParsePlainTxtSiteMapAsync(finalUrl, reader, cancellationToken);
