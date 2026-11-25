@@ -153,6 +153,7 @@ public sealed class RobotsService
     public bool HasDisallowed { get; private set; }
     public bool IsMalformed { get; private set; }
     public bool HasRobotRules { get; private set; }
+    public bool RobotFailure { get; private set; }
 
     public RobotsService() { }
 
@@ -190,6 +191,10 @@ public sealed class RobotsService
             var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             LoadTxt(fetchedRobotsTxt);
+        } else
+        {
+            Log.Information("Error in getting robots.txt for {Url} response code: {Code}. Assuming no pages are allowed.", robotsUrl, response.StatusCode);
+            RobotFailure = true;
         }
     }
 
@@ -350,6 +355,10 @@ public sealed class RobotsService
         string url,
         string userAgent)
     {
+        if (RobotFailure)
+        {
+            return false;
+        }
         if (!HasDisallowed || !HasRobotRules)
         {
             return true;
