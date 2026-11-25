@@ -1,6 +1,4 @@
-﻿using Serilog;
-
-namespace WebCrawler.Models;
+﻿namespace WebCrawler.Models;
 
 //This should be used to reorder the internal links
 //and filter out links for checking if a website is a company
