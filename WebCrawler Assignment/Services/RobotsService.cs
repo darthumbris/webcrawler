@@ -157,18 +157,6 @@ public sealed class RobotsService
 
     public RobotsService() { }
 
-    public void Reset()
-    {
-        _globalRules.Clear();
-        _specificRules.Clear();
-        _crawlDelayRules.Clear();
-        SiteMaps.Clear();
-
-        HasDisallowed = false;
-        IsMalformed = false;
-        HasRobotRules = false;
-    }
-
     public async Task LoadRobotTxt(string url, HttpClient httpClient, CancellationToken cancellationToken)
     {
         var baseUri = new Uri(url);
