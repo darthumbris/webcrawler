@@ -18,13 +18,11 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
 
     private Uri? _baseUri;
 
-    private int _score;
+    private int _score = 0;
     private readonly List<string> _reasons = [];
 
     public async Task<CompanyCheckResult> CheckCompanyAsync(string domainUrl, SessionEntry session, CancellationToken cancellationToken)
     {
-        _score = 0;
-
         Log.Information("Performing preliminary company check for: {Url}", domainUrl);
 
         var pageHandler = new SeleniumPageHandler(session.Driver, _requestOptions);
