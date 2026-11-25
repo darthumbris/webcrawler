@@ -1,4 +1,7 @@
 using Serilog;
+using Serilog.Context;
+using Serilog.Templates;
+using Serilog.Templates.Themes;
 using System.Net;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
@@ -60,7 +63,12 @@ builder.Services.AddHttpClient("Sitemap", client =>
 
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
-    .WriteTo.Console()
+    .WriteTo.Console(
+    new ExpressionTemplate(
+        "[{@t:HH:mm:ss} {@l:u3}] " +
+        "{#if SessionId is not null}[{SessionId}] {#end}" +
+        "{@m}\n{@x}", theme: TemplateTheme.Literate)
+    )
     .CreateLogger();
 
 builder.Host.UseSerilog();
@@ -73,44 +81,48 @@ app.MapPost("/company", async (
     CancellationToken cancellationToken
     ) =>
 {
-    Log.Information("Company check end point.");
-    if (string.IsNullOrWhiteSpace(request.DomainName))
-        return Results.BadRequest("domainName is required.");
+    using (LogContext.PushProperty("SessionId", request.Uuid))
+    {
+        Log.Information("Company check end point.");
+        if (string.IsNullOrWhiteSpace(request.DomainName))
+            return Results.BadRequest("domainName is required.");
 
-    if (!Uri.TryCreate(request.DomainName, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-    {
-        return Results.BadRequest(
-            "DomainName must be a valid HTTP or HTTPS URL.");
-    }
-
-    var (session, response) = sessions.BeginRequest(request.Uuid);
-    switch (response)
-    {
-        case SessionResponse.SessionFound:
-            break;
-        case SessionResponse.SessionNotFound:
-            return Results.NotFound("Session not found");
-        case SessionResponse.GuidParseFailure:
-            return Results.BadRequest("The uuid is not valid.");
-        case SessionResponse.SessionRequestOngoing:
-            return Results.Conflict("This session is already processing a request.");
-        default:
-            return Results.InternalServerError($"Company request failed: {response}");
-    }
-    try
-    {
-        var result = await companyChecker.CheckCompanyAsync(request.DomainName, session!, cancellationToken);
-        return Results.Ok(result);
-    }
-    finally
-    {
-        if (cancellationToken.IsCancellationRequested || session?.DriverInvalidated == true)
+        if (!Uri.TryCreate(request.DomainName, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            sessions.AbortRequest(request.Uuid);
+            return Results.BadRequest(
+                "DomainName must be a valid HTTP or HTTPS URL.");
         }
-        else
+
+        var (session, response) = sessions.BeginRequest(request.Uuid);
+        switch (response)
         {
-            sessions.EndRequest(request.Uuid);
+            case SessionResponse.SessionFound:
+                break;
+            case SessionResponse.SessionNotFound:
+                return Results.NotFound("Session not found");
+            case SessionResponse.GuidParseFailure:
+                return Results.BadRequest("The uuid is not valid.");
+            case SessionResponse.SessionRequestOngoing:
+                return Results.Conflict("This session is already processing a request.");
+            default:
+                return Results.InternalServerError($"Company request failed: {response}");
+        }
+
+        try
+        {
+            var result = await companyChecker.CheckCompanyAsync(request.DomainName, session!, cancellationToken);
+            return Results.Ok(result);
+        }
+        finally
+        {
+            if (cancellationToken.IsCancellationRequested || session?.DriverInvalidated == true)
+            {
+                sessions.AbortRequest(request.Uuid);
+            }
+            else
+            {
+                sessions.EndRequest(request.Uuid);
+            }
         }
     }
 });
@@ -121,59 +133,63 @@ app.MapPost("/crawl", async (
     SeleniumSessionService sessions,
     CancellationToken cancellationToken) =>
 {
-    Log.Information("Crawl endpoint trying domain: {Url}", request.DomainName);
-    if (string.IsNullOrWhiteSpace(request.DomainName))
-        return Results.BadRequest("domainName is required.");
-
-    if (!Uri.TryCreate(request.DomainName, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+    using (LogContext.PushProperty("SessionId", request.Uuid))
     {
-        return Results.BadRequest(
-            "DomainName must be a valid HTTP or HTTPS URL.");
-    }
+        Log.Information("Crawl endpoint trying domain: {Url}", request.DomainName);
+        if (string.IsNullOrWhiteSpace(request.DomainName))
+            return Results.BadRequest("domainName is required.");
 
-    var (session, response) = sessions.BeginRequest(request.Uuid);
-
-    switch (response)
-    {
-        case SessionResponse.SessionFound:
-            break;
-        case SessionResponse.SessionNotFound:
-            return Results.NotFound("Session not found");
-        case SessionResponse.GuidParseFailure:
-            return Results.BadRequest("The uuid is not valid.");
-        case SessionResponse.SessionRequestOngoing:
-            return Results.Conflict("This session is already processing a request.");
-        default:
-            return Results.InternalServerError($"Crawl request failed: {response}");
-    }
-
-    try
-    {
-        var result = await crawler.CrawlAsync(
-            request.DomainName,
-            request.CompanyCheck,
-            request.UseSitemaps ?? false,
-            session!,
-            cancellationToken);
-
-        return Results.Ok(result);
-    }
-    finally
-    {
-        if (cancellationToken.IsCancellationRequested || session?.DriverInvalidated == true)
+        if (!Uri.TryCreate(request.DomainName, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            sessions.AbortRequest(request.Uuid);
+            return Results.BadRequest(
+                "DomainName must be a valid HTTP or HTTPS URL.");
         }
-        else
+
+        var (session, response) = sessions.BeginRequest(request.Uuid);
+
+        switch (response)
         {
-            sessions.EndRequest(request.Uuid);
+            case SessionResponse.SessionFound:
+                break;
+            case SessionResponse.SessionNotFound:
+                return Results.NotFound("Session not found");
+            case SessionResponse.GuidParseFailure:
+                return Results.BadRequest("The uuid is not valid.");
+            case SessionResponse.SessionRequestOngoing:
+                return Results.Conflict("This session is already processing a request.");
+            default:
+                return Results.InternalServerError($"Crawl request failed: {response}");
+        }
+
+
+
+        try
+        {
+            var result = await crawler.CrawlAsync(
+                request.DomainName,
+                request.CompanyCheck,
+                request.UseSitemaps ?? false,
+                session!,
+                cancellationToken);
+
+            return Results.Ok(result);
+        }
+        finally
+        {
+            if (cancellationToken.IsCancellationRequested || session?.DriverInvalidated == true)
+            {
+                sessions.AbortRequest(request.Uuid);
+            }
+            else
+            {
+                sessions.EndRequest(request.Uuid);
+            }
         }
     }
 });
 
 app.MapPost("/open", (SessionOpenRequest request, SeleniumSessionService sessions) =>
 {
-    Log.Information("open endpoint request: {Request}", request.ToString());
     var (uid, response) = sessions.OpenSessionRemote(request.BrowserType);
 
     return response switch
@@ -187,15 +203,18 @@ app.MapPost("/open", (SessionOpenRequest request, SeleniumSessionService session
 
 app.MapPost("/close", (SessionCloseRequest request, SeleniumSessionService sessions) =>
 {
-    var closeResponse = sessions.CloseSession(request.Uuid);
-    return closeResponse switch
+    using (LogContext.PushProperty("SessionId", request.Uuid))
     {
-        SessionResponse.SessionClosedSuccessfully => Results.Ok(new SessionCloseResult(true)),
-        SessionResponse.SessionNotFound => Results.NotFound("Session not found"),
-        SessionResponse.SessionRequestOngoing => Results.Conflict("This session is still processing a request."),
-        SessionResponse.GuidParseFailure => Results.BadRequest("The uuid was not valid"),
-        _ => Results.InternalServerError($"Failed to close session: {closeResponse}"),
-    };
+        var closeResponse = sessions.CloseSession(request.Uuid);
+        return closeResponse switch
+        {
+            SessionResponse.SessionClosedSuccessfully => Results.Ok(new SessionCloseResult(true)),
+            SessionResponse.SessionNotFound => Results.NotFound("Session not found"),
+            SessionResponse.SessionRequestOngoing => Results.Conflict("This session is still processing a request."),
+            SessionResponse.GuidParseFailure => Results.BadRequest("The uuid was not valid"),
+            _ => Results.InternalServerError($"Failed to close session: {closeResponse}"),
+        };
+    }
 });
 
 app.MapGet("/health", () =>

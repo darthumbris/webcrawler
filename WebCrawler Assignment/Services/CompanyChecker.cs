@@ -1,6 +1,5 @@
 ﻿using HtmlAgilityPack;
 using Microsoft.Extensions.Options;
-using OpenQA.Selenium;
 using Serilog;
 using WebCrawler.Configuration;
 using WebCrawler.Models;
