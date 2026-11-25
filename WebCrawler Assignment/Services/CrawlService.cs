@@ -316,7 +316,8 @@ public sealed class CrawlService : ICrawlService
                 //retry the request if failed
                 if (processResult.Exception != null)
                 {
-                    if (crawlState.Requests.Count < _crawlSettings.MaxRequestRetries)
+                    var requestRetryCount = crawlState.Requests.Count - 1;
+                    if (requestRetryCount < _crawlSettings.MaxRequestRetries)
                     {
                         Log.Information("Request for {Url} got an exception. Will retry later.", processResult.Location);
                         crawlState.Requests.Add(new Request
@@ -329,6 +330,11 @@ public sealed class CrawlService : ICrawlService
                     else
                     {
                         Log.Information("Request for {Url} got an exception. Retry limit {Limit} reached.", processResult.Location, _crawlSettings.MaxRequestRetries);
+                        crawlState.Requests.Add(new Request
+                        {
+                            StartTime = processResult.StartTime,
+                            ElapsedTime = processResult.ElapsedTime,
+                        });
                     }
                 }
                 else
