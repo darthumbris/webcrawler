@@ -1,7 +1,9 @@
 ﻿using HtmlAgilityPack;
+using Microsoft.Extensions.Options;
 using Serilog;
 using System.Globalization;
 using System.Net;
+using WebCrawler.Configuration;
 using WebCrawler.Models;
 
 namespace WebCrawler.Services;
@@ -142,11 +144,12 @@ public class RobotHeader
     }
 }
 
-public sealed class RobotsService
+public sealed class RobotsService(IOptions<CrawlerSettings> options)
 {
     private readonly List<AccessRule> _globalRules = [];
     private readonly List<AccessRule> _specificRules = [];
     private readonly List<CrawlDelayRule> _crawlDelayRules = [];
+    private readonly CrawlerSettings _settings = options.Value;
 
     public List<SiteMap> SiteMaps { get; private set; } = [];
 
@@ -154,8 +157,6 @@ public sealed class RobotsService
     public bool IsMalformed { get; private set; }
     public bool HasRobotRules { get; private set; }
     public bool RobotFailure { get; private set; }
-
-    public RobotsService() { }
 
     public async Task LoadRobotTxt(string url, HttpClient httpClient, CancellationToken cancellationToken)
     {
@@ -168,6 +169,16 @@ public sealed class RobotsService
         }.Uri;
 
         using var response = await httpClient.GetAsync(robotsUrl, cancellationToken);
+        if (response.Content.Headers.ContentLength > _settings.MaxRobotsBytes)
+        {
+            Log.Warning(
+                "robots.txt exceeded the maximum size of {Limit} bytes: {Url}",
+                _settings.MaxRobotsBytes,
+                robotsUrl);
+
+            RobotFailure = true;
+            return;
+        }
         cancellationToken.ThrowIfCancellationRequested();
 
         if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
@@ -176,7 +187,10 @@ public sealed class RobotsService
         }
         else if ((int)response.StatusCode >= 200 && (int)response.StatusCode < 300)
         {
-            var fetchedRobotsTxt = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var limitedStream = new LimitedReadStream(responseStream, _settings.MaxRobotsBytes);
+            using var reader = new StreamReader(limitedStream);
+            var fetchedRobotsTxt = await reader.ReadToEndAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             LoadTxt(fetchedRobotsTxt);
         }

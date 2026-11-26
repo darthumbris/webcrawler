@@ -8,7 +8,7 @@ namespace WebCrawler.Services;
 
 public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<CrawlerSettings> options, IOptions<RequestOptions> requestOptions) : ICompanyChecker
 {
-    private readonly RobotsService _robotsService = new();
+    private readonly RobotsService _robotsService = new(options);
     private readonly HttpClient _httpClient = httpClientFactory.CreateClient("Crawler");
     private readonly CrawlerSettings _crawlSettings = options.Value;
     private readonly RequestOptions _requestOptions = requestOptions.Value;
@@ -30,6 +30,11 @@ public class CompanyChecker(IHttpClientFactory httpClientFactory, IOptions<Crawl
         {
             _baseUri = new Uri(domainUrl);
             await _robotsService.LoadRobotTxt(domainUrl, _httpClient, cancellationToken);
+        }
+        catch (InvalidDataException ex)
+        {
+            Log.Warning(ex, "robots.txt exceeded the maximum size of {Limit} bytes.", _crawlSettings.MaxRobotsBytes);
+            return new CompanyCheckResult(false, -5, [CompanyCheckReason.RobotException.ToString()]);
         }
         catch (UriFormatException ex)
         {

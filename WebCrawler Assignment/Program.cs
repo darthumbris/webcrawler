@@ -19,6 +19,8 @@ builder.Services
         "MaxRequestRetries cannot be negative.")
     .Validate(settings => settings.MaxSitemapDecompressedBytes > 0,
     "MaxSitemapDecompressedBytes must be greater than zero.")
+    .Validate(settings => settings.MaxRobotsBytes > 0,
+    "MaxRobotsBytes must be greater than zero.")
     .Validate(settings => settings.MaxChromeSessions > 0,
         "MaxChromeSessions must be greater than zero.")
     .Validate(settings => settings.MaxFirefoxSessions > 0,

@@ -9,7 +9,7 @@ namespace WebCrawler.Services;
 
 public sealed class CrawlService : ICrawlService
 {
-    private readonly RobotsService _robotsService = new();
+    private readonly RobotsService _robotsService;
     private readonly ConcurrentDictionary<string, byte> _visited = new();
     private readonly ConcurrentBag<ExtractedPage> _fetchedPages = [];
     private readonly ConcurrentDictionary<Uri, CrawlUrlState> _crawlStates = new();
@@ -45,6 +45,7 @@ public sealed class CrawlService : ICrawlService
         _siteMapService = new SiteMapService(sitemapClient, options);
         _crawlSettings = options.Value;
         _requestProcessor = new(requestOptions);
+        _robotsService = new(options);
     }
 
     private async Task LoadSiteMaps(string url, CancellationToken cancellationToken)
