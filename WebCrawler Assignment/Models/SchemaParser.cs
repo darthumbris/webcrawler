@@ -5,15 +5,38 @@ namespace WebCrawler.Models
 {
     public class SchemaParser
     {
+        private const int MaxJsonLdCharacters = 1_000_000;
+        private const int MaxJsonLdDocuments = 50;
+        private const int MaxJsonLdDepth = 32;
+
         public List<StructuredCompanyData> Parse(IEnumerable<string> extractedJson)
         {
             var result = new List<StructuredCompanyData>();
+            var processedDocuments = 0;
 
             foreach (var json in extractedJson)
             {
                 try
                 {
-                    using var doc = JsonDocument.Parse(json);
+                    if (string.IsNullOrEmpty(json))
+                    {
+                        continue;
+                    }
+                    if (json.Length > MaxJsonLdCharacters)
+                    {
+                        Log.Information("Skipped JSON-LD document because it exceeded the size limit {Limit}.", MaxJsonLdCharacters);
+                        continue;
+                    }
+                    using var doc = JsonDocument.Parse(json, new JsonDocumentOptions
+                    {
+                        MaxDepth = MaxJsonLdDepth
+                    });
+
+                    if (processedDocuments++ >= MaxJsonLdDocuments)
+                    {
+                        Log.Information("Reached limit {Limit} of JSON-LD documents stopping parsing.", MaxJsonLdDocuments);
+                        break;
+                    }
 
                     ExtractEntities(doc.RootElement, result);
                 }
@@ -26,13 +49,18 @@ namespace WebCrawler.Models
             return result;
         }
 
-        private static void ExtractEntities(JsonElement el, List<StructuredCompanyData> result)
+        private static void ExtractEntities(JsonElement el, List<StructuredCompanyData> result, int depth = 0)
         {
+            if (depth > MaxJsonLdDepth)
+            {
+                Log.Information("Reached JSON-LD depth limit {Limit} stopping extraction.", MaxJsonLdDepth);
+                return;
+            }
             if (el.ValueKind == JsonValueKind.Array)
             {
                 foreach (var e in el.EnumerateArray())
                 {
-                    ExtractEntities(e, result);
+                    ExtractEntities(e, result, depth + 1);
                 }
 
                 return;
@@ -44,7 +72,7 @@ namespace WebCrawler.Models
             //graph
             if (el.TryGetProperty("@graph", out var graph))
             {
-                ExtractEntities(graph, result);
+                ExtractEntities(graph, result, depth + 1);
             }
 
             var types = NormalizeTypes(GetTypes(el));
@@ -83,7 +111,7 @@ namespace WebCrawler.Models
                 {
                     if (property.Name != "@graph")
                     {
-                        ExtractEntities(property.Value, result);
+                        ExtractEntities(property.Value, result, depth + 1);
                     }
                 }
             }
