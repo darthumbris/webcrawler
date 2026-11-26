@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using Serilog;
+using System.Text.Json;
 
 namespace WebCrawler.Models
 {
@@ -16,9 +17,9 @@ namespace WebCrawler.Models
 
                     ExtractEntities(doc.RootElement, result);
                 }
-                catch (JsonException)
+                catch (JsonException ex)
                 {
-
+                    Log.Information(ex, "Ignoring invalid JSON-LD data.");
                 }
             }
 
