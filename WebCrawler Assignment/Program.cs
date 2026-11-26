@@ -25,6 +25,11 @@ builder.Services
         "MaxFirefoxSessions must be greater than zero.")
     .Validate(settings => settings.MaxEdgeSessions > 0,
         "MaxEdgeSessions must be greater than zero.")
+    .Validate(settings => settings.MaxSitemaps > 0, "MaxSitemaps must be greater than zero.")
+    .Validate(settings => settings.MaxSitemapLinks > 0, "MaxSitemapLinks must be greater than zero.")
+    .Validate(settings => settings.MaxSitemapIndices > 0, "MaxSitemapIndices must be greater than zero.")
+    .Validate(settings => settings.MaxSitemapTotalLinks > 0, "MaxSitemapTotalLinks must be greater than zero.")
+    .Validate(settings => settings.MaxSitemapDepth >= 0, "MaxSitemapDepth cannot be negative.")
     .Validate(settings => settings.PageLoadTimeOut > TimeSpan.Zero, "PageLoadTimeOut must be greater than zero.")
     .Validate(settings => settings.SessionTimeOut > TimeSpan.Zero, "SessionTimeOut must be greater than zero.")
     .Validate(settings => !string.IsNullOrEmpty(settings.HubUrl), "HubUrl can't be empty.")

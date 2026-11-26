@@ -8,9 +8,8 @@ using WebCrawler.Configuration;
 public sealed class SiteMapService(HttpClient httpClient, IOptions<CrawlerSettings> options)
 {
     private readonly HttpClient _httpClient = httpClient;
-    private static readonly SiteMapParser _siteMapParser = new();
+    private readonly SiteMapParser _siteMapParser = new(options);
     private readonly CrawlerSettings _settings = options.Value;
-    private static readonly int _maxSiteMaps = 500;
 
     private static Uri[] LoadSiteMaps(Uri baseUrl, List<SiteMap> robotSiteMaps, CancellationToken cancellationToken)
     {
@@ -184,14 +183,20 @@ public sealed class SiteMapService(HttpClient httpClient, IOptions<CrawlerSettin
         var baseUri = new Uri(baseUrl);
         var fetchedSiteMaps = new Dictionary<Uri, FetchedSiteMap>();
         var discoveredSitemapUrls = new HashSet<Uri>(LoadSiteMaps(baseUri, robotSiteMaps, cancellationToken));
-        var sitemapUrls = new Stack<Uri>(discoveredSitemapUrls);
+        var sitemapUrls = new Stack<(Uri Url, int Depth)>(discoveredSitemapUrls.Select(url => (url, 0)));
+        var totalLinks = 0;
 
         while (sitemapUrls.Count > 0)
         {
-            var url = sitemapUrls.Pop();
+            var (url, depth) = sitemapUrls.Pop();
 
             if (fetchedSiteMaps.ContainsKey(url))
             {
+                continue;
+            }
+            if (depth > _settings.MaxSitemapDepth)
+            {
+                Log.Information("Sitemap traversal depth limit {Limit} reached at {Url}.", _settings.MaxSitemapDepth, url);
                 continue;
             }
 
@@ -208,10 +213,18 @@ public sealed class SiteMapService(HttpClient httpClient, IOptions<CrawlerSettin
                 continue;
             }
 
-            fetchedSiteMaps.Add(url, sitemapFile);
-            if (fetchedSiteMaps.Count == _maxSiteMaps)
+            if (totalLinks + sitemapFile.Links.Count > _settings.MaxSitemapTotalLinks)
             {
-                Log.Information("Sitemap limit reached");
+                Log.Information("Sitemap total links limit {Limit} reached", _settings.MaxSitemapTotalLinks);
+                break;
+            }
+
+            totalLinks += sitemapFile.Links.Count;
+
+            fetchedSiteMaps.Add(url, sitemapFile);
+            if (fetchedSiteMaps.Count == _settings.MaxSitemaps)
+            {
+                Log.Information("Sitemap limit {Limit} reached", _settings.MaxSitemaps);
                 break;
             }
 
@@ -220,7 +233,7 @@ public sealed class SiteMapService(HttpClient httpClient, IOptions<CrawlerSettin
                 if (CrawlUrlPolicy.IsCrawlable(baseUri, siteMapIndexUrl) &&
                     discoveredSitemapUrls.Add(siteMapIndexUrl))
                 {
-                    sitemapUrls.Push(siteMapIndexUrl);
+                    sitemapUrls.Push((siteMapIndexUrl, depth + 1));
                 }
             }
 

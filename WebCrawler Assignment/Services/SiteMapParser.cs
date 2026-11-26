@@ -1,13 +1,14 @@
-﻿using Serilog;
+﻿using Microsoft.Extensions.Options;
+using Serilog;
 using System.Xml;
 using System.Xml.Linq;
+using WebCrawler.Configuration;
 
 namespace WebCrawler.Services;
 
-public class SiteMapParser
+public class SiteMapParser(IOptions<CrawlerSettings> options)
 {
-
-    private static readonly int _maxSiteMapLinks = 50000;
+    private readonly CrawlerSettings _settings = options.Value;
     private static bool ParseSiteMapUrl(XElement node, out Uri? url)
     {
         Uri? location = null;
@@ -64,9 +65,9 @@ public class SiteMapParser
                     {
                         links.Add(parsedUrl!);
                     }
-                    if (links.Count > _maxSiteMapLinks)
+                    if (links.Count >= _settings.MaxSitemapLinks)
                     {
-                        Log.Information("Sitemap link limit reached");
+                        Log.Information("Sitemap link limit {Limit} reached", _settings.MaxSitemapLinks);
                         break;
                     }
                 }
@@ -84,9 +85,9 @@ public class SiteMapParser
                     {
                         sitemapIndices.Add(parsedIndexUrl!);
                     }
-                    if (sitemapIndices.Count > _maxSiteMapLinks)
+                    if (sitemapIndices.Count >= _settings.MaxSitemapIndices)
                     {
-                        Log.Information("Sitemap index limit reached");
+                        Log.Information("Sitemap index limit {Limit} reached", _settings.MaxSitemapIndices);
                         break;
                     }
                 }
@@ -111,9 +112,9 @@ public class SiteMapParser
             {
                 links.Add(parsedUrl);
             }
-            if (links.Count > _maxSiteMapLinks)
+            if (links.Count >= _settings.MaxSitemapLinks)
             {
-                Log.Information("Sitemap link limit reached");
+                Log.Information("Sitemap link limit {Limit} reached", _settings.MaxSitemapLinks);
                 break;
             }
         }

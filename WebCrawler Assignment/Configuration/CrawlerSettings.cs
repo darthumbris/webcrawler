@@ -6,6 +6,11 @@ public sealed class CrawlerSettings
     public int MaxPagesCompanyCheck { get; set; } = 50;
     public int MaxRequestRetries { get; set; } = 10;
     public long MaxSitemapDecompressedBytes { get; set; } = 50 * 1024 * 1024;
+    public int MaxSitemaps { get; set; } = 500;
+    public int MaxSitemapLinks { get; set; } = 50000;
+    public int MaxSitemapIndices { get; set; } = 50000;
+    public int MaxSitemapTotalLinks { get; set; } = 250000;
+    public int MaxSitemapDepth { get; set; } = 10;
     public TimeSpan PageLoadTimeOut { get; set; } = TimeSpan.FromSeconds(30);
     public TimeSpan SessionTimeOut { get; set; } = TimeSpan.FromMinutes(15);
 
