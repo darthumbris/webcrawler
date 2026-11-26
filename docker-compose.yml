@@ -7,9 +7,16 @@ services:
       - "8080:8080"
     environment:
       ASPNETCORE_URLS: http://+:8080
-      Crawler__HubUrl: http://+:4444
+      Crawler__HubUrl: http://selenium-hub:4444
     depends_on:
-      - selenium-hub
+      selenium-hub:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "--silent", "http://localhost:8080/health/ready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
   chrome:
     image: selenium/node-chrome:latest
     volumes:

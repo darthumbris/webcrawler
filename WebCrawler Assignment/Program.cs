@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Context;
 using Serilog.Templates;
@@ -51,6 +52,7 @@ builder.Services.AddSingleton<SeleniumSessionService>();
 builder.Services.AddHostedService<SessionCleanupService>();
 builder.Services.AddScoped<ICrawlService, CrawlService>();
 builder.Services.AddScoped<ICompanyChecker, CompanyChecker>();
+builder.Services.AddHealthChecks();
 
 //the HttpClient have these userAgents so that the robots.txt and sitemaps can be loaded properly
 //selenium will use the correct userAgent
@@ -82,6 +84,8 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 var app = builder.Build();
+
+builder.Services.AddHealthChecks();
 
 app.MapPost("/company", async (
     CompanyRequest request,
@@ -234,6 +238,72 @@ app.MapGet("/health", () =>
         service = "webcrawler",
         timestamp = DateTimeOffset.UtcNow,
     });
+});
+
+app.MapGet("/health/live", () =>
+{
+    return Results.Ok(new
+    {
+        status = "healthy",
+        service = "webcrawler",
+        timestamp = DateTimeOffset.UtcNow,
+    });
+});
+
+app.MapGet("/health/ready", async (
+    IHttpClientFactory httpClientFactory,
+    IOptions<CrawlerSettings> options,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        Log.Information("Checking readiness of Selenium grid hub {Url}", options.Value.HubUrl);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken);
+
+        timeout.CancelAfter(TimeSpan.FromSeconds(100));
+
+        var client = httpClientFactory.CreateClient();
+        var hubUri = new Uri(options.Value.HubUrl);
+        var statusUri = new UriBuilder(hubUri)
+        {
+            Path = "/status",
+            Query = string.Empty,
+            Fragment = string.Empty
+        }.Uri;
+
+        using var response = await client.GetAsync(
+            statusUri,
+            timeout.Token);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        return Results.Ok(new
+        {
+            status = "ready",
+            service = "webcrawler",
+            seleniumGrid = "available",
+            timestamp = DateTimeOffset.UtcNow
+        });
+    }
+    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        Log.Warning("Cancelled");
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+    catch (HttpRequestException)
+    {
+        Log.Warning("HttpRequestException");
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
+    catch
+    {
+        Log.Warning("Other Exception");
+        return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+    }
 });
 
 app.Run();
